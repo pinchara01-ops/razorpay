@@ -1,0 +1,40 @@
+.button {
+  border: 0;
+  border-radius: var(--radius-card);
+  padding: 10px 14px;
+  font-weight: 700;
+  min-height: 42px;
+}
+
+.button-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-ink);
+}
+
+.button-secondary {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+}
+
+.button-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel);
+}

@@ -1,0 +1,96 @@
+:root {
+  --color-bg: #f7f5ef;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f5f1;
+  --color-ink: #17201b;
+  --color-muted: #5f6f66;
+  --color-border: #d8ded8;
+  --color-primary: #2454ff;
+  --color-primary-ink: #ffffff;
+  --color-success: #1f7a4d;
+  --color-success-bg: #e6f5ec;
+  --color-warning: #a66300;
+  --color-warning-bg: #fff1d6;
+  --color-danger: #b42318;
+  --color-danger-bg: #fde7e5;
+  --color-info: #246b91;
+  --color-info-bg: #e3f3fb;
+  --shadow-panel: 0 18px 45px rgba(23, 32, 27, 0.09);
+  --radius-card: 8px;
+  --radius-pill: 999px;
+  --space-page: 24px;
+  --content-max: 1440px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f4f6f4;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-page);
+}
+
+.status-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.status-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.status-info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --space-page: 14px;
+  }
+}
