@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { catalog } from "@/data/catalog";
-import { growthRules } from "@/data/growthRules";
 import {
   applyPriceOverrides,
   approveFinalCart,
@@ -13,6 +11,10 @@ import {
   selectRecommendedProduct,
   startCommerceSession
 } from "@/lib/commerce/engine";
+import { growthPolicyRepository, productRepository } from "@/lib/repositories/commerceRepositories";
+
+const catalog = productRepository.list();
+const growthRules = growthPolicyRepository.list();
 
 function chooseFirstRecommendation(prompt: string) {
   const started = startCommerceSession(prompt, catalog);
@@ -55,10 +57,10 @@ describe("commerce session engine", () => {
 
   it("uses the merchant playbook as an input rather than a fixed internal rule", () => {
     const { started, selected } = chooseFirstRecommendation("Gift for my brother under 1000, oily skin");
-    expect(selected.offer?.ruleId).toBe("gift-note-cross-sell");
+    expect(selected.offer?.ruleId).toBe("gift-experience-boundary");
 
     const disabledGiftRule = growthRules.map((rule) =>
-      rule.id === "gift-note-cross-sell" ? { ...rule, enabled: false } : rule
+      rule.id === "gift-experience-boundary" ? { ...rule, enabled: false } : rule
     );
     const reevaluated = reevaluateGrowthPlaybook(selected, catalog, disabledGiftRule);
 
@@ -79,14 +81,15 @@ describe("commerce session engine", () => {
     expect(selected.activeCart).toEqual([starter]);
   });
 
-  it("uses the catalog product graph for a non-gift cross-sell", () => {
+  it("uses evidence-backed basket patterns for a non-gift cross-sell", () => {
     const started = startCommerceSession("I need an oily skin cleanser under 1000", catalog);
     const cleanser = started.recommendation.recommendedItems.find((item) => item.productId === "cleanser-oily-100");
     expect(cleanser).toBeTruthy();
 
     const selected = selectRecommendedProduct(started, cleanser!.productId, catalog, growthRules);
     expect(selected.growthSignals.some((signal) => signal.type === "catalog_cross_sell")).toBe(true);
-    expect(selected.offer?.ruleId).toBe("cleanser-sunscreen-companion");
+    expect(selected.offer?.ruleId).toBe("standard-growth-boundary");
+    expect(selected.offer?.source).toBe("historical_pattern");
     expect(selected.offerDecision).toBe("available_to_buyer");
   });
 
@@ -131,6 +134,17 @@ describe("commerce session engine", () => {
 
     expect(result.passed).toBe(false);
     expect(result.checks.find((check) => check.name === "Cart integrity")?.passed).toBe(false);
+  });
+
+  it("blocks checkout when stock changes after buyer approval", () => {
+    const { selected } = chooseFirstRecommendation("I need an oily skin cleanser under 1000");
+    const buyerApproved = approveFinalCart(selected, catalog);
+    const productId = buyerApproved.activeCart[0].productId;
+    const changedCatalog = catalog.map((product) => (product.id === productId ? { ...product, stock: 0 } : product));
+    const result = checkCheckout(buyerApproved, changedCatalog);
+
+    expect(result.passed).toBe(false);
+    expect(result.checks.find((check) => check.name === `Checkout stock: ${productId}`)?.passed).toBe(false);
   });
 
   it("asks for missing information before starting the commerce pipeline", () => {

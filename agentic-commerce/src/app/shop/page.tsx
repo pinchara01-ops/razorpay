@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Mic, Search, ShieldCheck, ShoppingBag, Sparkles, Square, UserRound, Volume2, X } from "lucide-react";
-import { catalog } from "@/data/catalog";
 import { loadBuyerProfile, type BuyerProfile } from "@/lib/buyerProfile";
 import { getCartTotal } from "@/lib/cart";
 import {
@@ -24,6 +23,7 @@ import { COMMERCE_SESSION_KEY, clearCommerceSession, loadCommerceSession, saveCo
 import { loadGrowthPlaybook } from "@/lib/growth/playbookStore";
 import { formatINR } from "@/lib/money";
 import { openRazorpayCheckout, type RazorpaySuccess } from "@/lib/payments/openRazorpayCheckout";
+import { productRepository } from "@/lib/repositories/commerceRepositories";
 import type { CheckoutResult, CommerceSession, PaymentVerificationResult } from "@/lib/types";
 import "../page.css";
 
@@ -47,6 +47,8 @@ const suggestions = [
   "Build me a simple day routine under 1500",
   "I want a phone under 50000 for photography"
 ];
+
+const catalog = productRepository.list();
 
 const initialMessages: ChatMessage[] = [{
   id: "welcome",
@@ -491,7 +493,7 @@ export default function ShopPage() {
             {session?.status === "awaiting_merchant" ? <div className="notice neutral"><ShieldCheck size={17} /><span><strong>{selectedProduct?.name ?? "Your selected item"} is selected.</strong>A merchant-controlled offer is being reviewed. Your cart has not changed.<button className="inline-action" onClick={skipPendingOffer}>Continue without the offer</button></span></div> : null}
 
             {session?.offerDecision === "available_to_buyer" && session.offer ? <div className="offer-card">
-              <span className="offer-label">From the merchant playbook</span><strong>{session.offer.buyerMessage}</strong><p>Exact total with this offer: {formatINR(session.offer.finalAmount)}. Say okay to add it and pay. Rule: {session.offer.ruleId}. {session.offer.safetySummary}</p>
+              <span className="offer-label">{session.offer.source === "historical_pattern" ? `Evidence-backed from ${session.offer.evidence.observationCount} seed observations` : "Cold-start hypothesis"} · {session.offer.boundaryName}</span><strong>{session.offer.buyerMessage}</strong><p>Exact total with this offer: {formatINR(session.offer.finalAmount)}. Say okay to add it and pay. Boundary: {session.offer.ruleId}. {session.offer.safetySummary}</p>
               <div className="decision-row"><button className="accept-button" disabled={isCheckingOut} onClick={() => void acceptOfferAndPay()}><Check size={16} /> {isCheckingOut ? "Opening..." : `Add & pay ${formatINR(session.offer.finalAmount)}`}</button><button className="decline-button" onClick={declineOffer}><X size={16} /> Skip</button></div>
             </div> : null}
 

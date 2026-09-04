@@ -5,6 +5,7 @@ export type Product = {
   name: string;
   category: ProductCategory;
   price: number;
+  costPrice: number;
   currency: "INR";
   stock: number;
   attributes: string[];
@@ -128,25 +129,37 @@ export type GrowthSignal = {
   type: "gift_intent" | "routine_gap" | "catalog_cross_sell" | "bundle_opportunity" | "checkout_hesitation";
   summary: string;
   confidence: number;
+  source: GrowthEvidenceSource;
+  evidence: GrowthEvidence;
 };
 
 export type OfferType = "cross_sell" | "upsell" | "bundle_switch" | "discount";
 export type ApprovalMode = "pre_approved" | "live_merchant_approval";
+export type RiskLevel = "low" | "medium" | "high";
+export type GrowthEvidenceSource = "historical_pattern" | "cold_start_hypothesis";
+export type ExperimentVariant = "control" | "treatment";
+
+export type GrowthEvidence = {
+  explanation: string;
+  observationCount: number;
+  support?: number;
+  confidence?: number;
+  lift?: number;
+  antecedentProductIds?: string[];
+  consequentProductId?: string;
+};
 
 export type GrowthRule = {
   id: string;
   name: string;
   enabled: boolean;
-  trigger: GrowthSignal["type"];
-  offerType: OfferType;
-  whenProductIds?: string[];
-  productId?: string;
-  replacementProductId?: string;
-  approvalMode: ApprovalMode;
-  riskLevel: "low" | "medium" | "high";
+  allowedOfferTypes: OfferType[];
+  allowedCategories: ProductCategory[];
+  approvalByRisk: Record<RiskLevel, ApprovalMode>;
   maxOffersPerSession: number;
   minCartAmount?: number;
   maxAddedAmount?: number;
+  minMarginPercent: number;
   explanation: string;
   constraints: {
     mustStayWithinBuyerBudget: boolean;
@@ -156,17 +169,37 @@ export type GrowthRule = {
   };
 };
 
-export type OfferProposal = {
+export type GrowthOpportunityCandidate = {
   id: string;
-  ruleId: string;
   signal: GrowthSignal;
   offerType: OfferType;
-  approvalMode: ApprovalMode;
-  riskLevel: GrowthRule["riskLevel"];
+  riskLevel: RiskLevel;
   proposedItems: CartItem[];
   finalCart: CartItem[];
   addedAmount: number;
   finalAmount: number;
+  incrementalMarginPercent: number;
+  source: GrowthEvidenceSource;
+  evidence: GrowthEvidence;
+  reason: string;
+};
+
+export type OfferProposal = {
+  id: string;
+  ruleId: string;
+  boundaryName: string;
+  signal: GrowthSignal;
+  offerType: OfferType;
+  approvalMode: ApprovalMode;
+  riskLevel: RiskLevel;
+  proposedItems: CartItem[];
+  finalCart: CartItem[];
+  addedAmount: number;
+  finalAmount: number;
+  incrementalMarginPercent: number;
+  source: GrowthEvidenceSource;
+  evidence: GrowthEvidence;
+  opportunityReason: string;
   merchantScript: string;
   buyerMessage: string;
   safetySummary: string;
@@ -195,12 +228,14 @@ export type CommerceSession = {
   id: string;
   prompt: string;
   status: CommerceSessionStatus;
+  experiment: OfferExperimentAssignment;
   recommendation: Recommendation;
   sessionEvents: SessionEvent[];
   growthSignals: GrowthSignal[];
   offer: OfferProposal | null;
   offerGuardrails: GuardrailResult;
   offerDecision: OfferDecision;
+  offerObservations: OfferObservation[];
   activeCart: CartItem[];
   mandate: Mandate | null;
   checkout: CheckoutResult | null;
@@ -209,4 +244,23 @@ export type CommerceSession = {
   auditEvents: AuditEvent[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type OfferExperimentAssignment = {
+  id: string;
+  variant: ExperimentVariant;
+  assignedAt: string;
+};
+
+export type OfferObservation = {
+  experimentId: string;
+  sessionId: string;
+  offerId: string | null;
+  variant: ExperimentVariant;
+  shown: boolean;
+  accepted: boolean;
+  checkoutStarted: boolean;
+  purchased: boolean;
+  finalOrderValue: number;
+  recordedAt: string;
 };

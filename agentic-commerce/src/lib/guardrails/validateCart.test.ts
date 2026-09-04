@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { catalog } from "@/data/catalog";
 import { parseIntent } from "@/lib/agent/parseIntent";
 import { createMandate } from "@/lib/mandates/createMandate";
 import { validateCart, validateMandateForCheckout } from "@/lib/guardrails/validateCart";
+import { productRepository } from "@/lib/repositories/commerceRepositories";
+
+const catalog = productRepository.list();
 
 describe("cart guardrails", () => {
   it("allows a valid in-stock cart within budget", () => {

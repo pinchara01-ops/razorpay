@@ -1,15 +1,14 @@
-import { catalog } from "@/data/catalog";
-import { growthRules as defaultGrowthRules } from "@/data/growthRules";
 import { recommendCart } from "@/lib/agent/recommendCart";
 import { createAuditEvent } from "@/lib/audit/auditLog";
 import { getCartTotal } from "@/lib/cart";
 import { createSessionEvent } from "@/lib/events/sessionEvents";
-import { detectGrowthSignals } from "@/lib/growth/detectOpportunity";
+import { generateGrowthOpportunities } from "@/lib/growth/detectOpportunity";
 import { proposeBestOffer } from "@/lib/growth/proposeOffer";
 import { validateOffer } from "@/lib/growth/validateOffer";
-import { validateCart, validateMandateForCheckout } from "@/lib/guardrails/validateCart";
+import { validateCart, validateCheckoutInventory, validateMandateForCheckout } from "@/lib/guardrails/validateCart";
 import { createMandate } from "@/lib/mandates/createMandate";
 import { formatINR } from "@/lib/money";
+import { growthPolicyRepository, productRepository } from "@/lib/repositories/commerceRepositories";
 import type {
   CheckoutResult,
   CommerceSession,
@@ -27,6 +26,30 @@ function now() {
 
 function sessionId() {
   return `session_${Date.now().toString(36)}`;
+}
+
+function experimentVariant(id: string) {
+  const bucket = Array.from(id).reduce((total, character) => total + character.charCodeAt(0), 0);
+  return bucket % 7 === 0 ? "control" : "treatment";
+}
+
+function createOfferObservation(
+  session: CommerceSession,
+  updates: Partial<CommerceSession["offerObservations"][number]>
+): CommerceSession["offerObservations"][number] {
+  return {
+    experimentId: session.experiment.id,
+    sessionId: session.id,
+    offerId: session.offer?.id ?? null,
+    variant: session.experiment.variant,
+    shown: false,
+    accepted: false,
+    checkoutStarted: false,
+    purchased: false,
+    finalOrderValue: getCartTotal(session.activeCart),
+    recordedAt: now(),
+    ...updates
+  };
 }
 
 function statusForOffer(decision: OfferDecision): CommerceSessionStatus {
@@ -57,7 +80,7 @@ export function applyPriceOverrides(products: Product[], overrides: Record<strin
   }));
 }
 
-export function startCommerceSession(prompt: string, products: Product[] = catalog): CommerceSession {
+export function startCommerceSession(prompt: string, products: Product[] = productRepository.list()): CommerceSession {
   const recommendation = recommendCart(prompt, products);
   const sessionEvents = [
     createSessionEvent({ type: "chat_message", value: prompt }),
@@ -67,6 +90,12 @@ export function startCommerceSession(prompt: string, products: Product[] = catal
   const offerGuardrails = validateOffer(null, recommendation.intent, products);
 
   const timestamp = now();
+  const id = sessionId();
+  const experiment = {
+    id: "growth-offer-v1",
+    variant: experimentVariant(prompt),
+    assignedAt: timestamp
+  } as const;
   const auditEvents = [
     createAuditEvent({
       actor: "buyer",
@@ -84,15 +113,17 @@ export function startCommerceSession(prompt: string, products: Product[] = catal
   ];
 
   return {
-    id: sessionId(),
+    id,
     prompt,
     status: recommendationCanProceed ? "awaiting_product_choice" : "checkout_blocked",
+    experiment,
     recommendation,
     sessionEvents,
     growthSignals: [],
     offer: null,
     offerGuardrails,
     offerDecision: "none",
+    offerObservations: [],
     activeCart: [],
     mandate: null,
     checkout: null,
@@ -111,24 +142,27 @@ function evaluateGrowth(
   sessionEvents: CommerceSession["sessionEvents"],
   activeCart: CommerceSession["activeCart"]
 ) {
-  const growthSignals = detectGrowthSignals(sessionEvents, activeCart, session.recommendation.intent, products);
-  const offer = proposeBestOffer(growthSignals, activeCart, session.recommendation.intent, products, rules);
+  const candidates = generateGrowthOpportunities(sessionEvents, activeCart, session.recommendation.intent, products);
+  const growthSignals = candidates.map((candidate) => candidate.signal);
+  const treatmentOffer = proposeBestOffer(candidates, activeCart, session.recommendation.intent, products, rules);
+  const offer = session.experiment.variant === "control" ? null : treatmentOffer;
   const offerGuardrails = validateOffer(offer, session.recommendation.intent, products, rules);
 
   let offerDecision: OfferDecision = "none";
+  if (treatmentOffer && session.experiment.variant === "control") offerDecision = "blocked";
   if (offer && !offerGuardrails.passed) offerDecision = "blocked";
   if (offer && offerGuardrails.passed) {
     offerDecision = offer.approvalMode === "pre_approved" ? "available_to_buyer" : "pending_merchant";
   }
 
-  return { growthSignals, offer, offerGuardrails, offerDecision };
+  return { growthSignals, offer, offerGuardrails, offerDecision, withheldOffer: treatmentOffer && session.experiment.variant === "control" ? treatmentOffer : null };
 }
 
 export function selectRecommendedProduct(
   session: CommerceSession,
   productId: string,
   products: Product[],
-  rules: GrowthRule[] = defaultGrowthRules
+  rules: GrowthRule[] = growthPolicyRepository.list()
 ): CommerceSession {
   if (session.status !== "awaiting_product_choice") return session;
   const option = session.recommendation.recommendedItems.find((item) => item.productId === productId);
@@ -156,7 +190,7 @@ export function selectRecommendedProduct(
       action: growth.growthSignals.length ? "growth_moment_detected" : "growth_moment_not_found",
       summary: growth.growthSignals[0]?.summary ?? "No relevant in-session growth moment was detected after cart selection.",
       tone: growth.growthSignals.length ? "warning" : "info",
-      data: { signals: growth.growthSignals }
+      data: { signals: growth.growthSignals, evidenceSources: growth.growthSignals.map((signal) => signal.source) }
     }),
     createAuditEvent({
       actor: "system",
@@ -165,9 +199,19 @@ export function selectRecommendedProduct(
         ? growth.offerGuardrails.passed
           ? growth.offer.safetySummary
           : growth.offerGuardrails.checks.find((check) => !check.passed)?.reason ?? "Offer failed policy checks."
-        : "No enabled Growth Playbook rule matched the selected product and session.",
+        : growth.withheldOffer
+          ? "Session is in the experiment control group, so an eligible offer was measured but not shown."
+          : "No enabled Growth Playbook boundary matched the selected product and session.",
       tone: growth.offerDecision === "blocked" ? "danger" : growth.offer ? "success" : "info",
-      data: { offer: growth.offer, checks: growth.offerGuardrails.checks }
+      data: {
+        offer: growth.offer,
+        withheldOffer: growth.withheldOffer,
+        checks: growth.offerGuardrails.checks,
+        source: growth.offer?.source ?? growth.withheldOffer?.source,
+        opportunityReason: growth.offer?.opportunityReason ?? growth.withheldOffer?.opportunityReason,
+        evidence: growth.offer?.evidence ?? growth.withheldOffer?.evidence,
+        boundaryId: growth.offer?.ruleId ?? growth.withheldOffer?.ruleId
+      }
     })
   ];
 
@@ -178,17 +222,30 @@ export function selectRecommendedProduct(
         action: "playbook_offer_pre_approved",
         summary: "An enabled low-risk rule made the offer available. It has not changed the cart.",
         tone: "success",
-        data: { offerId: growth.offer?.id }
+        data: { offerId: growth.offer?.id, source: growth.offer?.source, evidence: growth.offer?.evidence, boundaryId: growth.offer?.ruleId }
       })
     );
   }
 
+  const offerObservations = growth.offer
+    ? [...session.offerObservations, createOfferObservation({ ...session, offer: growth.offer, activeCart, experiment: session.experiment, offerObservations: session.offerObservations }, { shown: true, finalOrderValue: growth.offer.finalAmount })]
+    : growth.withheldOffer
+      ? [...session.offerObservations, createOfferObservation({ ...session, offer: growth.withheldOffer, activeCart, experiment: session.experiment, offerObservations: session.offerObservations }, { shown: false, finalOrderValue: getCartTotal(activeCart) })]
+      : session.offerObservations;
+  const sessionGrowth = {
+    growthSignals: growth.growthSignals,
+    offer: growth.offer,
+    offerGuardrails: growth.offerGuardrails,
+    offerDecision: growth.offerDecision
+  };
+
   return {
     ...session,
-    ...growth,
+    ...sessionGrowth,
     status: statusForOffer(growth.offerDecision),
     activeCart,
     sessionEvents,
+    offerObservations,
     auditEvents,
     updatedAt: now()
   };
@@ -201,10 +258,16 @@ export function reevaluateGrowthPlaybook(
 ): CommerceSession {
   if (session.activeCart.length === 0 || session.mandate || session.checkout) return session;
   const growth = evaluateGrowth(session, products, rules, session.sessionEvents, session.activeCart);
+  const sessionGrowth = {
+    growthSignals: growth.growthSignals,
+    offer: growth.offer,
+    offerGuardrails: growth.offerGuardrails,
+    offerDecision: growth.offerDecision
+  };
 
   return {
     ...session,
-    ...growth,
+    ...sessionGrowth,
     status: statusForOffer(growth.offerDecision),
     auditEvents: [
       ...session.auditEvents,
@@ -213,9 +276,9 @@ export function reevaluateGrowthPlaybook(
         action: "growth_playbook_reevaluated",
         summary: growth.offer
           ? `Updated playbook produced ${growth.offer.ruleId}.`
-          : "Updated playbook produced no eligible offer for this cart.",
+          : "Updated playbook produced no eligible bounded offer for this cart.",
         tone: growth.offer ? "success" : "info",
-        data: { rules: rules.map(({ id, enabled }) => ({ id, enabled })), offer: growth.offer }
+        data: { rules: rules.map(({ id, enabled }) => ({ id, enabled })), offer: growth.offer, source: growth.offer?.source, evidence: growth.offer?.evidence, boundaryId: growth.offer?.ruleId }
       })
     ],
     updatedAt: now()
@@ -240,7 +303,7 @@ export function decideMerchantOffer(session: CommerceSession, approved: boolean)
           ? "Merchant approved presenting the guarded offer. The buyer must still accept it."
           : "Merchant rejected the offer. The original cart remains unchanged.",
         tone: approved ? "success" : "info",
-        data: { offerId: session.offer.id, approvalMode: session.offer.approvalMode }
+        data: { offerId: session.offer.id, approvalMode: session.offer.approvalMode, source: session.offer.source, evidence: session.offer.evidence, boundaryId: session.offer.ruleId }
       })
     ]
   };
@@ -258,6 +321,11 @@ export function decideBuyerOffer(session: CommerceSession, accepted: boolean): C
     mandate: null,
     checkout: null,
     payment: null,
+    offerObservations: session.offerObservations.map((observation, index, all) =>
+      index === all.length - 1 && observation.offerId === session.offer?.id
+        ? { ...observation, accepted, finalOrderValue: getCartTotal(activeCart), recordedAt: now() }
+        : observation
+    ),
     updatedAt: now(),
     auditEvents: [
       ...session.auditEvents,
@@ -268,7 +336,7 @@ export function decideBuyerOffer(session: CommerceSession, accepted: boolean): C
           ? `Buyer accepted the offer. Proposed cart is now ${formatINR(getCartTotal(activeCart))}.`
           : "Buyer declined the offer. The original cart remains unchanged.",
         tone: accepted ? "success" : "info",
-        data: { offerId: session.offer.id, cart: activeCart }
+        data: { offerId: session.offer.id, cart: activeCart, source: session.offer.source, evidence: session.offer.evidence, boundaryId: session.offer.ruleId }
       })
     ]
   };
@@ -338,7 +406,13 @@ export function approveFinalCart(session: CommerceSession, products: Product[]):
 }
 
 export function checkCheckout(session: CommerceSession, products: Product[]): GuardrailResult {
-  return validateMandateForCheckout(session.mandate, session.activeCart, products);
+  const mandateChecks = validateMandateForCheckout(session.mandate, session.activeCart, products);
+  const inventoryChecks = validateCheckoutInventory(session.activeCart, products);
+  const checks = [...mandateChecks.checks, ...inventoryChecks.checks];
+  return {
+    passed: checks.every((check) => check.passed),
+    checks
+  };
 }
 
 export function recordCheckoutBlocked(session: CommerceSession, checks: GuardrailResult): CommerceSession {
@@ -372,6 +446,11 @@ export function recordCheckoutResult(session: CommerceSession, result: CheckoutR
     ...session,
     mandate,
     checkout: result,
+    offerObservations: session.offerObservations.map((observation, index, all) =>
+      index === all.length - 1
+        ? { ...observation, checkoutStarted: result.ok, finalOrderValue: result.amount ?? getCartTotal(session.activeCart), recordedAt: now() }
+        : observation
+    ),
     status: result.ok ? "checkout_complete" : "checkout_blocked",
     updatedAt: now(),
     auditEvents: [
@@ -391,6 +470,11 @@ export function recordPaymentVerification(session: CommerceSession, result: Paym
   return {
     ...session,
     payment: result,
+    offerObservations: session.offerObservations.map((observation, index, all) =>
+      index === all.length - 1
+        ? { ...observation, purchased: result.ok, recordedAt: now() }
+        : observation
+    ),
     status: result.ok ? "payment_complete" : "checkout_complete",
     updatedAt: now(),
     auditEvents: [

@@ -1,10 +1,10 @@
-import { growthRules } from "@/data/growthRules";
+import { growthPolicyRepository } from "@/lib/repositories/commerceRepositories";
 import type { GrowthRule } from "@/lib/types";
 
 export const GROWTH_PLAYBOOK_KEY = "glowcart.growth-playbook.v1";
 
 function cloneDefaults() {
-  return growthRules.map((rule) => ({ ...rule, constraints: { ...rule.constraints } }));
+  return growthPolicyRepository.list().map((rule) => ({ ...rule, approvalByRisk: { ...rule.approvalByRisk }, constraints: { ...rule.constraints } }));
 }
 
 export function loadGrowthPlaybook(): GrowthRule[] {

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Clock3, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
-import { catalog } from "@/data/catalog";
 import { getCartTotal, hydrateCartItems } from "@/lib/cart";
 import {
   applyPriceOverrides,
@@ -18,8 +17,11 @@ import {
 import { COMMERCE_SESSION_KEY, loadCommerceSession, saveCommerceSession } from "@/lib/commerce/sessionStore";
 import { formatINR } from "@/lib/money";
 import { openRazorpayCheckout, type RazorpaySuccess } from "@/lib/payments/openRazorpayCheckout";
+import { productRepository } from "@/lib/repositories/commerceRepositories";
 import type { CheckoutResult, CommerceSession, PaymentVerificationResult } from "@/lib/types";
 import "../page.css";
+
+const catalog = productRepository.list();
 
 export default function CartPage() {
   const [session, setSession] = useState<CommerceSession | null>(null);
@@ -134,7 +136,7 @@ export default function CartPage() {
           </section> : null}
 
           {session?.offerDecision === "available_to_buyer" && session.offer ? <section className="cart-offer">
-            <Sparkles size={20} /><div><span>Merchant playbook · {session.offer.ruleId}</span><strong>{session.offer.buyerMessage}</strong><p>{session.offer.safetySummary}</p></div><div><button className="offer-yes" onClick={() => chooseOffer(true)}><Check size={16} /> Add</button><button onClick={() => chooseOffer(false)}><X size={16} /> Skip</button></div>
+            <Sparkles size={20} /><div><span>{session.offer.source === "historical_pattern" ? `Evidence-backed · ${session.offer.evidence.observationCount} observations` : "Cold-start hypothesis"} · {session.offer.boundaryName}</span><strong>{session.offer.buyerMessage}</strong><p>{session.offer.safetySummary}</p></div><div><button className="offer-yes" onClick={() => chooseOffer(true)}><Check size={16} /> Add</button><button onClick={() => chooseOffer(false)}><X size={16} /> Skip</button></div>
           </section> : null}
 
           {session?.status === "checkout_blocked" ? <div className="cart-block"><ShieldCheck size={20} /><div><strong>Checkout paused</strong><p>{session.auditEvents.at(-1)?.summary}</p><span>No money action was taken.</span></div></div> : null}

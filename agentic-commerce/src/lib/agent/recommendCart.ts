@@ -1,6 +1,5 @@
-import { catalog } from "@/data/catalog";
-import { policies } from "@/data/policies";
 import { parseIntent } from "@/lib/agent/parseIntent";
+import { policyRepository, productRepository } from "@/lib/repositories/commerceRepositories";
 import type { CartItem, MerchantPolicy, Product, Recommendation } from "@/lib/types";
 
 const ignoredTerms = new Set([
@@ -27,8 +26,8 @@ function hasPolicyEvidence(product: Product, merchantPolicies: MerchantPolicy[])
 
 export function recommendCart(
   rawIntent: string,
-  products: Product[] = catalog,
-  merchantPolicies: MerchantPolicy[] = policies
+  products: Product[] = productRepository.list(),
+  merchantPolicies: MerchantPolicy[] = policyRepository.list()
 ): Recommendation {
   const intent = parseIntent(rawIntent);
 

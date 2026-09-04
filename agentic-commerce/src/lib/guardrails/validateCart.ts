@@ -85,3 +85,21 @@ export function validateMandateForCheckout(mandate: Mandate | null, currentItems
     checks
   };
 }
+
+export function validateCheckoutInventory(currentItems: CartItem[], products: Product[]): GuardrailResult {
+  const checks: GuardrailCheck[] = currentItems.map((item) => {
+    const product = products.find((candidate) => candidate.id === item.productId);
+    return {
+      name: `Checkout stock: ${item.productId}`,
+      passed: Boolean(product && product.stock >= item.quantity),
+      reason: product && product.stock >= item.quantity
+        ? "Live inventory still covers the approved cart."
+        : "Inventory changed after approval; checkout must stop before payment."
+    };
+  });
+
+  return {
+    passed: checks.every((check) => check.passed),
+    checks
+  };
+}

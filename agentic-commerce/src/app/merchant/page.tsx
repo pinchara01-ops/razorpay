@@ -21,15 +21,13 @@ import {
   Volume2,
   X
 } from "lucide-react";
-import { catalog } from "@/data/catalog";
-import { growthRules } from "@/data/growthRules";
-import { policies } from "@/data/policies";
 import { hydrateCartItems } from "@/lib/cart";
 import { applyPriceOverrides, decideMerchantOffer, overrideProductPrice, reevaluateGrowthPlaybook } from "@/lib/commerce/engine";
 import { COMMERCE_SESSION_KEY, loadCommerceSession, saveCommerceSession } from "@/lib/commerce/sessionStore";
 import { loadGrowthPlaybook, resetGrowthPlaybook, saveGrowthPlaybook } from "@/lib/growth/playbookStore";
 import { formatINR } from "@/lib/money";
-import type { ApprovalMode, CommerceSession, GrowthRule } from "@/lib/types";
+import { growthPolicyRepository, policyRepository, productRepository } from "@/lib/repositories/commerceRepositories";
+import type { ApprovalMode, CommerceSession, GrowthRule, RiskLevel } from "@/lib/types";
 import "@/components/ui.css";
 import "../page.css";
 
@@ -42,9 +40,13 @@ const navigation: Array<{ id: ConsoleView; label: string; icon: typeof LayoutDas
   { id: "audit", label: "Audit trail", icon: FileClock }
 ];
 
+const catalog = productRepository.list();
+const policies = policyRepository.list();
+const defaultGrowthRules = growthPolicyRepository.list();
+
 export default function MerchantConsolePage() {
   const [session, setSession] = useState<CommerceSession | null>(null);
-  const [rules, setRules] = useState<GrowthRule[]>(growthRules);
+  const [rules, setRules] = useState<GrowthRule[]>(defaultGrowthRules);
   const [view, setView] = useState<ConsoleView>("overview");
   const [voiceStatus, setVoiceStatus] = useState("Ready");
 
@@ -73,8 +75,14 @@ export default function MerchantConsolePage() {
     if (session) persist(decideMerchantOffer(session, approved));
   }
 
-  function updateRule(ruleId: string, changes: Partial<Pick<GrowthRule, "enabled" | "approvalMode">>) {
-    const nextRules = rules.map((rule) => rule.id === ruleId ? { ...rule, ...changes } : rule);
+  function updateRule(ruleId: string, changes: Partial<Pick<GrowthRule, "enabled">> & { risk?: RiskLevel; approvalMode?: ApprovalMode }) {
+    const nextRules = rules.map((rule) => {
+      if (rule.id !== ruleId) return rule;
+      if (changes.risk && changes.approvalMode) {
+        return { ...rule, approvalByRisk: { ...rule.approvalByRisk, [changes.risk]: changes.approvalMode } };
+      }
+      return { ...rule, enabled: changes.enabled ?? rule.enabled };
+    });
     setRules(nextRules);
     saveGrowthPlaybook(nextRules);
     if (session) persist(reevaluateGrowthPlaybook(session, products, nextRules));
@@ -214,12 +222,12 @@ export default function MerchantConsolePage() {
               <div className="rules-table">
                 {rules.map((rule) => (
                   <article key={rule.id}>
-                    <div><strong>{rule.name}</strong><span>{rule.explanation}</span><small>Trigger: {rule.trigger.replaceAll("_", " ")} · Target: {rule.productId ? catalog.find((product) => product.id === rule.productId)?.name ?? rule.productId : "cart replacement"} · Rule ID: {rule.id}</small></div>
-                    <span>{rule.offerType.replaceAll("_", " ")}</span>
-                    <span className={`risk-${rule.riskLevel}`}>{rule.riskLevel} risk</span>
+                    <div><strong>{rule.name}</strong><span>{rule.explanation}</span><small>Allows: {rule.allowedOfferTypes.map((type) => type.replaceAll("_", " ")).join(", ")} · Categories: {rule.allowedCategories.join(", ")} · Min margin: {rule.minMarginPercent}% · Rule ID: {rule.id}</small></div>
+                    <span>{rule.maxAddedAmount ? `Max add ${formatINR(rule.maxAddedAmount)}` : "No added amount"}</span>
+                    <span className="risk-low">boundary</span>
                     <div className="rule-controls">
                       <button className={`rule-toggle ${rule.enabled ? "on" : ""}`} role="switch" aria-checked={rule.enabled} onClick={() => updateRule(rule.id, { enabled: !rule.enabled })}><span />{rule.enabled ? "Active" : "Off"}</button>
-                      <select aria-label={`Approval mode for ${rule.name}`} disabled={!rule.enabled} value={rule.approvalMode} onChange={(event) => updateRule(rule.id, { approvalMode: event.target.value as ApprovalMode })}><option value="pre_approved">Pre-approved</option><option value="live_merchant_approval">Live approval</option></select>
+                      <select aria-label={`Low-risk approval mode for ${rule.name}`} disabled={!rule.enabled} value={rule.approvalByRisk.low} onChange={(event) => updateRule(rule.id, { risk: "low", approvalMode: event.target.value as ApprovalMode })}><option value="pre_approved">Low risk: pre-approved</option><option value="live_merchant_approval">Low risk: live approval</option></select>
                     </div>
                   </article>
                 ))}
@@ -233,7 +241,7 @@ export default function MerchantConsolePage() {
           <section className="admin-panel">
             <div className="admin-heading"><div><span className="section-icon"><FileClock size={18} /></span><div><h2>Decision history</h2><p>Record of recommendations, approvals, blocks, and payment state</p></div></div><span className="state-pill">{audit.length} events</span></div>
             <div className="audit-table">
-              {audit.map((event) => <article key={event.id}><span className={`audit-dot audit-${event.tone ?? "info"}`} /><div><strong>{event.action.replaceAll("_", " ")}</strong><p>{event.summary}</p></div><span>{event.actor}</span><time>{new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></article>)}
+              {audit.map((event) => <article key={event.id}><span className={`audit-dot audit-${event.tone ?? "info"}`} /><div><strong>{event.action.replaceAll("_", " ")}</strong><p>{event.summary}</p>{typeof event.data?.source === "string" ? <small>{event.data.source === "historical_pattern" ? "Evidence-backed" : "Cold-start hypothesis"} · Boundary: {String(event.data.boundaryId ?? "none")}</small> : null}</div><span>{event.actor}</span><time>{new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></article>)}
             </div>
           </section>
         ) : null}
@@ -249,12 +257,15 @@ function Control({ label, passed }: { label: string; passed: boolean }) {
 function Opportunity({ session, voiceStatus, onVoice, onDecision }: { session: CommerceSession; voiceStatus: string; onVoice: () => void; onDecision: (approved: boolean) => void }) {
   if (!session.offer) return null;
   const pending = session.offerDecision === "pending_merchant";
+  const sourceLabel = session.offer.source === "historical_pattern"
+    ? `Evidence-backed · ${session.offer.evidence.observationCount} observations`
+    : "Cold-start hypothesis";
   return (
     <div className="opportunity-card">
       <div className="opportunity-main">
-        <div className="signal-row"><span>{session.offer.signal.type.replaceAll("_", " ")}</span><span>{Math.round(session.offer.signal.confidence * 100)}% confidence</span><span>{session.offer.riskLevel} risk</span></div>
+        <div className="signal-row"><span>{session.offer.signal.type.replaceAll("_", " ")}</span><span>{sourceLabel}</span><span>{Math.round(session.offer.signal.confidence * 100)}% confidence</span><span>{session.offer.riskLevel} risk</span></div>
         <h3>{session.offer.merchantScript}</h3>
-        <p>{session.offer.safetySummary}</p>
+        <p>{session.offer.safetySummary} Boundary checked: {session.offer.boundaryName}. Margin: {Math.round(session.offer.incrementalMarginPercent)}%.</p>
         <div className="opportunity-amount"><span>Added value <strong>{formatINR(session.offer.addedAmount)}</strong></span><span>Proposed total <strong>{formatINR(session.offer.finalAmount)}</strong></span></div>
       </div>
       <div className="opportunity-actions">

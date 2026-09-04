@@ -1,25 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { catalog } from "@/data/catalog";
 import { recommendCart } from "@/lib/agent/recommendCart";
 import { createGiftSessionEvents } from "@/lib/events/sessionEvents";
-import { detectGrowthSignals } from "@/lib/growth/detectOpportunity";
+import { generateGrowthOpportunities } from "@/lib/growth/detectOpportunity";
 import { proposeBestOffer } from "@/lib/growth/proposeOffer";
 import { validateOffer } from "@/lib/growth/validateOffer";
+import { productRepository } from "@/lib/repositories/commerceRepositories";
+
+const catalog = productRepository.list();
 
 describe("growth offer engine", () => {
-  it("proposes a gift note cross-sell from gift intent", () => {
+  it("proposes a gift add-on within the gift boundary from gift intent", () => {
     const recommendation = recommendCart("I need a gift for my brother under 1000");
-    const signals = detectGrowthSignals(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent);
-    const offer = proposeBestOffer(signals, recommendation.recommendedItems, recommendation.intent, catalog);
+    const candidates = generateGrowthOpportunities(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent, catalog);
+    const offer = proposeBestOffer(candidates, recommendation.recommendedItems, recommendation.intent, catalog);
 
-    expect(offer?.ruleId).toBe("gift-note-cross-sell");
+    expect(offer?.ruleId).toBe("gift-experience-boundary");
     expect(offer?.approvalMode).toBe("live_merchant_approval");
+    expect(offer?.source).toBeDefined();
   });
 
   it("validates a safe offer that stays inside budget", () => {
     const recommendation = recommendCart("I need a gift for my brother under 1000");
-    const signals = detectGrowthSignals(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent);
-    const offer = proposeBestOffer(signals, recommendation.recommendedItems, recommendation.intent, catalog);
+    const candidates = generateGrowthOpportunities(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent, catalog);
+    const offer = proposeBestOffer(candidates, recommendation.recommendedItems, recommendation.intent, catalog);
     const result = validateOffer(offer, recommendation.intent, catalog);
 
     expect(result.passed).toBe(true);
@@ -27,8 +30,8 @@ describe("growth offer engine", () => {
 
   it("blocks an offer that exceeds buyer budget", () => {
     const recommendation = recommendCart("I need a gift for my brother under 800");
-    const signals = detectGrowthSignals(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent);
-    const offer = proposeBestOffer(signals, recommendation.recommendedItems, recommendation.intent, catalog);
+    const candidates = generateGrowthOpportunities(createGiftSessionEvents(), recommendation.recommendedItems, recommendation.intent, catalog);
+    const offer = proposeBestOffer(candidates, recommendation.recommendedItems, recommendation.intent, catalog);
     const result = validateOffer(offer, recommendation.intent, catalog);
 
     expect(result.passed).toBe(false);
