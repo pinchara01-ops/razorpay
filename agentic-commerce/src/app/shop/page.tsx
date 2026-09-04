@@ -64,6 +64,10 @@ function isNegative(text: string) {
   return /^(no|nope|skip|decline|not now|without it)[.!\s]*$/i.test(text.trim());
 }
 
+function isFinishedCommerceSession(current: CommerceSession | null) {
+  return Boolean(current && ["checkout_complete", "payment_complete", "checkout_blocked"].includes(current.status));
+}
+
 export default function ShopPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<BuyerProfile | null>(null);
@@ -297,20 +301,31 @@ export default function ShopPage() {
   async function submitMessage(text = input) {
     const buyerText = text.trim();
     if (!buyerText || isThinking) return;
-    const combined = `${intentDraft} ${buyerText}`.trim();
-    setMessages((current) => [...current, { id: `buyer_${Date.now()}`, role: "buyer", text: buyerText }]);
+    const buyerMessage: ChatMessage = { id: `buyer_${Date.now()}`, role: "buyer", text: buyerText };
+    const startsFreshSearch = isFinishedCommerceSession(session) && !isAffirmative(buyerText);
+    const activeSession = startsFreshSearch ? null : session;
+    const activeProducts = startsFreshSearch ? catalog : products;
+    const combined = `${startsFreshSearch ? "" : intentDraft} ${buyerText}`.trim();
+
+    if (startsFreshSearch) {
+      clearCommerceSession();
+      setSession(null);
+      setIntentDraft("");
+    }
+
+    setMessages((current) => startsFreshSearch ? [buyerMessage] : [...current, buyerMessage]);
     setInput("");
     setIsThinking(true);
 
-    if (session?.status === "awaiting_buyer_offer") {
+    if (activeSession?.status === "awaiting_buyer_offer") {
       if (isAffirmative(buyerText)) {
-        const accepted = decideBuyerOffer(session, true);
+        const accepted = decideBuyerOffer(activeSession, true);
         persist(accepted);
         await approveAndCheckout(accepted);
         return;
       }
       if (isNegative(buyerText)) {
-        const declined = decideBuyerOffer(session, false);
+        const declined = decideBuyerOffer(activeSession, false);
         persist(declined);
         addAgentMessage(exactApprovalMessage(declined));
         setIsThinking(false);
@@ -318,13 +333,13 @@ export default function ShopPage() {
       }
     }
 
-    if (session?.status === "awaiting_buyer_approval" && isAffirmative(buyerText)) {
-      await approveAndCheckout(session);
+    if (activeSession?.status === "awaiting_buyer_approval" && isAffirmative(buyerText)) {
+      await approveAndCheckout(activeSession);
       return;
     }
 
-    if (session?.status === "checkout_complete" && isAffirmative(buyerText)) {
-      await launchRazorpayCheckout(session);
+    if (activeSession?.status === "checkout_complete" && isAffirmative(buyerText)) {
+      await launchRazorpayCheckout(activeSession);
       setIsThinking(false);
       return;
     }
@@ -361,7 +376,7 @@ export default function ShopPage() {
       return;
     }
 
-    const next = startCommerceSession(analysis?.normalizedPrompt || combined, products);
+    const next = startCommerceSession(analysis?.normalizedPrompt || combined, activeProducts);
     persist(next);
     setIntentDraft("");
     const resultMessages = [
