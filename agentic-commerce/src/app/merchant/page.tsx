@@ -142,6 +142,7 @@ export default function MerchantConsolePage() {
           })}
         </nav>
         <div className="sidebar-footer">
+          <Link href="/findit"><ShieldCheck size={17} /> Find-it eval</Link>
           <button><Settings2 size={18} /> Settings</button>
           <Link href="/shop"><ArrowLeft size={17} /> Open storefront</Link>
         </div>

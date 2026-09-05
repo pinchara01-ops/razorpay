@@ -199,6 +199,7 @@ This is our hackathon-sized version of agent-payment authorization.
 | Buyer approval | Confirm final cart and exact amount inside GlowGuide; keep `/cart` optional | Context-bound text/voice approval or explicit button + Mandate Lite |
 | Payment action | Create test-mode payment order | Razorpay Orders API |
 | Proof | Show all decisions/actions | Audit trail + merchant dashboard |
+| Scenario evaluation | Test whether the engine follows core commerce safety rules | Find-it dashboard with 500 synthetic scenarios |
 
 ## API Keys Needed
 
@@ -292,4 +293,5 @@ Growth opportunity withheld. This shopper asked for a bigger deal. The proposed 
 | Buyer and merchant voice | OpenAI microphone transcription and ElevenLabs English voice connected; browser speech fallback for output |
 | Audit trail and handled price-change failure | Implemented |
 | LLM structured-output adapter | Implemented and verified |
+| Find-it 500-scenario synthetic evaluation | Implemented at `/findit`; covers catalog grounding, claim safety, auto-growth, playbook blocks, review-only deals, cart integrity, and stock recheck |
 | Durable database and authenticated merchant access | Required before production use |

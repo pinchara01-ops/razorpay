@@ -1,0 +1,122 @@
+import Link from "next/link";
+import { Activity, ArrowLeft, Check, ClipboardCheck, FileWarning, ShieldCheck, X } from "lucide-react";
+import { formatINR } from "@/lib/money";
+import { runFindItEvaluation, type FindItScenarioCategory } from "@/lib/evaluation/findItScenarios";
+import "../page.css";
+
+const categoryLabels: Record<FindItScenarioCategory, string> = {
+  catalog_grounding: "Catalog grounding",
+  claim_safety: "Claim safety",
+  auto_growth: "Auto growth",
+  playbook_block: "Playbook block",
+  review_only: "Review-only deals",
+  cart_integrity: "Cart integrity",
+  stock_recheck: "Stock recheck"
+};
+
+function percent(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+export default function FindItPage() {
+  const report = runFindItEvaluation();
+  const samples = report.results.filter((_, index) => index % 23 === 0).slice(0, 18);
+  const displayRows = report.failures.length > 0 ? report.failures : samples;
+
+  return (
+    <main className="findit-page">
+      <header className="store-header">
+        <Link className="brand" href="/" aria-label="GlowCart home">
+          <span className="brand-mark">G</span>
+          <span>GlowCart</span>
+        </Link>
+        <nav className="store-nav" aria-label="Evaluation navigation">
+          <Link href="/shop">Shop</Link>
+          <Link href="/merchant">Merchant</Link>
+          <Link href="/findit">Find-it eval</Link>
+        </nav>
+        <Link className="back-to-shop" href="/merchant"><ArrowLeft size={17} /> Merchant console</Link>
+      </header>
+
+      <section className="findit-hero">
+        <div>
+          <p className="kicker">Synthetic scenario evaluation</p>
+          <h1>Find-it checks whether the commerce engine follows the rules.</h1>
+          <span>500 deterministic scenarios run against the same recommendation, growth, playbook, mandate, and checkout guardrail code used by the app.</span>
+        </div>
+        <div className={report.failed ? "findit-score has-failures" : "findit-score"}>
+          <span>Pass rate</span>
+          <strong>{percent(report.passRate)}</strong>
+          <small>{report.passed}/{report.total} scenarios passed</small>
+        </div>
+      </section>
+
+      <section className="findit-metrics">
+        <article><Activity size={20} /><span>Total scenarios</span><strong>{report.total}</strong></article>
+        <article><Check size={20} /><span>Passed</span><strong>{report.passed}</strong></article>
+        <article><X size={20} /><span>Failed</span><strong>{report.failed}</strong></article>
+        <article><ShieldCheck size={20} /><span>Blocked money actions</span><strong>{report.moneyActionsBlocked}</strong></article>
+      </section>
+
+      <section className="findit-grid">
+        <article className="findit-panel">
+          <div className="findit-heading">
+            <div><ClipboardCheck size={19} /><h2>Category coverage</h2></div>
+            <span>Engine-level, no LLM calls</span>
+          </div>
+          <div className="category-results">
+            {report.categories.map((category) => (
+              <div key={category.category}>
+                <span>{categoryLabels[category.category]}</span>
+                <strong>{category.passed}/{category.total}</strong>
+                <div aria-label={`${categoryLabels[category.category]} pass rate`}>
+                  <i style={{ width: `${category.passRate * 100}%` }} />
+                </div>
+                <small>{category.failed ? `${category.failed} failed` : "All passed"}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="findit-panel">
+          <div className="findit-heading">
+            <div><FileWarning size={19} /><h2>What this proves</h2></div>
+          </div>
+          <ul className="findit-proof-list">
+            <li>Unsupported products do not become fake recommendations.</li>
+            <li>Unverified medical/safety claims stop before cart creation.</li>
+            <li>Auto-approved offers still need buyer approval before Razorpay.</li>
+            <li>Review-only deals are withheld from the buyer and logged.</li>
+            <li>Price or stock changes block checkout before money movement.</li>
+          </ul>
+          <p className="findit-note">These are synthetic cases, not real customer analytics. The goal is regression confidence for the agentic commerce control logic.</p>
+        </article>
+      </section>
+
+      <section className="findit-panel">
+        <div className="findit-heading">
+          <div><Activity size={19} /><h2>{report.failures.length ? "Failures to inspect" : "Representative scenarios"}</h2></div>
+          <span>{displayRows.length} shown</span>
+        </div>
+        <div className="scenario-table">
+          <div className="scenario-row scenario-head">
+            <span>Case</span>
+            <span>Category</span>
+            <span>Buyer prompt</span>
+            <span>Result</span>
+            <span>Amount</span>
+          </div>
+          {displayRows.map((result) => (
+            <div className="scenario-row" key={result.id}>
+              <span><strong>{result.id}</strong><small>{result.passed ? "passed" : "failed"}</small></span>
+              <span>{categoryLabels[result.category]}</span>
+              <span>{result.buyerPrompt}</span>
+              <span><strong>{result.actual}</strong><small>{result.evidence.join(" · ")}</small></span>
+              <span>{result.finalAmount ? formatINR(result.finalAmount) : "None"}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -25,6 +25,7 @@ This audit maps the architecture diagram to executable code. `Implemented` means
 | Buyer and Merchant Voice | Implemented and connected | Visible buyer voice mode, MediaRecorder, OpenAI transcription through `/api/transcribe`, ElevenLabs English speech through `/api/voice`, and merchant briefing | Add streaming/realtime turn-taking if needed after the pitch |
 | Audit Trail | Partial | `CommerceSession.auditEvents`, merchant audit view | Move from browser storage to an append-only server store |
 | Handled Failure | Implemented | Price override invalidates cart hash and blocks checkout | Add network and inventory-change scenarios |
+| Find-it Scenario Evaluation | Implemented | `/findit`, `src/lib/evaluation/findItScenarios.ts`, `src/lib/evaluation/findItScenarios.test.ts` | Replace synthetic-only set with seeded production telemetry once available |
 
 ## Verified Loops
 
@@ -45,11 +46,12 @@ This audit maps the architecture diagram to executable code. `Implemented` means
 - The approved happy path creates a Razorpay test-mode order and opens hosted Checkout without a second application-owned click.
 - Exact payment signatures are accepted and tampered signatures are rejected.
 - ElevenLabs returns playable MP3 audio, and OpenAI accurately transcribes that audio through the buyer voice adapter.
+- Find-it runs 500 synthetic scenarios across catalog grounding, claim safety, auto-growth, playbook blocks, review-only deals, cart integrity, and stock recheck.
 
 ## Verification Snapshot
 
-- Unit tests: 21 passed, including no-match, policy evidence, product-graph growth, event-ordering, playbook mutation, cart, orchestration, and payment-signature guardrails.
-- Browser journeys: 4 passed, including no-match, playbook mutation, guarded price-change failure, visible voice controls, conversational approval, and real Razorpay Test Mode checkout opening from GlowGuide.
+- Unit tests: 27 passed, including no-match, policy evidence, product-graph growth, event-ordering, playbook mutation, cart, orchestration, payment-signature guardrails, and Find-it scenario evaluation.
+- Browser journeys: 5 passed, including no-match, Find-it dashboard render, playbook mutation, guarded price-change failure, visible voice controls, conversational approval, and real Razorpay Test Mode checkout opening from GlowGuide.
 - Live provider checks: OpenAI structured intent and audio transcription, ElevenLabs audio, and Razorpay order creation returned HTTP 200.
 - Production build and lint: passed.
 

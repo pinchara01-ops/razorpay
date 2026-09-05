@@ -698,13 +698,13 @@ This should be security / financial-integrity verification, not called a penetra
 
 ### 25. Agent Decision Evaluation — 500 Scenario Regression Suite
 
-Status: Backlog
+Status: Done
 Priority: Medium
 Labels: `evaluation`, `testing`, `ai`, `growth`, `security`
-Evidence: No 500-scenario suite exists in the repository.
+Evidence: `src/lib/evaluation/findItScenarios.ts`, `src/lib/evaluation/findItScenarios.test.ts`, `src/app/findit/page.tsx`, `e2e/commerce-flow.spec.ts`
 
 Problem:
-The agent needs broader controlled evaluation beyond the current unit/e2e cases.
+The agent needs broader controlled evaluation beyond the primary happy-path demo.
 
 Acceptance criteria:
 - Controlled scenarios, not real customer data.
@@ -715,10 +715,12 @@ Acceptance criteria:
 - Payment safety.
 - Expected vs actual decisions.
 - Pass/fail results and critical safety metrics.
-- Scenario inspection.
+- Scenario inspection dashboard.
 
-Reason not Done:
-The repository contains tests but not a 500-scenario evaluation harness.
+Verification:
+- Unit test verifies exactly 500 generated scenarios and category pass rates.
+- Browser E2E verifies the Find-it dashboard renders the 500-scenario report.
+- Current synthetic report passes 500/500 scenarios.
 
 ## Tickets Deliberately Not Created
 
@@ -751,14 +753,12 @@ Future work:
 
 Tickets with GitHub implementation evidence:
 
-- Tickets 1-22 can reference commits `27bfb8e`, `3a7abb2`, and/or `0da300f` plus the listed files.
+- Tickets 1-25 can reference commits `27bfb8e`, `3a7abb2`, `0da300f`, `41e7a4b`, and/or the current Find-it evaluation commit plus the listed files.
 
 Important current gaps:
 
-- No Linear connector available in this session, so these tickets were reconstructed in this document rather than created in Linear.
 - Commerce session, mandate, audit, playbook, and observation data are not persisted server-side.
 - Merchant authentication and permissions are not implemented.
-- The e2e suite should be re-run and may need selector text updated after the growth-boundary refactor.
-- 500-scenario evaluation does not exist yet.
+- Find-it scenario evaluation is synthetic; it is not real customer analytics or a learned model benchmark.
 - Security / financial-integrity verification is meaningful but not exhaustive.
 - Razorpay webhook-backed order state is not implemented.

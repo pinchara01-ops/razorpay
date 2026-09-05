@@ -8,10 +8,11 @@
 - Buyer shop: http://localhost:3000/shop
 - Merchant console: http://localhost:3000/merchant
 - Cart page, only if needed: http://localhost:3000/cart
+- Find-it scenario dashboard: http://localhost:3000/findit
 - Linear project: https://linear.app/main-el-sem-4/project/glowcart-ai-growth-and-agentic-commerce-558e1405d848
 - Architecture spec: `docs/final-architecture-spec.md`
 
-Note: There is no implemented 500-scenario dashboard page yet. That is captured honestly as the future evaluation work in Linear issue `MAI-56`. For the current demo, show the merchant dashboard, audit trail, unit/E2E test evidence, and the planned evaluation ticket.
+Note: The Find-it dashboard is a synthetic deterministic engine evaluation, not real customer analytics. It runs 500 generated scenarios against the commerce engine, playbook, mandate, and checkout guardrails.
 
 ## Recommended Demo Flow
 
@@ -38,7 +39,7 @@ Note: There is no implemented 500-scenario dashboard page yet. That is captured 
    - Use unsupported intent: `I want a phone under 50000 for photography`
    - Show that the system refuses to invent a product.
    - Or use merchant price change before payment to show cart hash failure.
-7. Show audit trail and test/evaluation story.
+7. Show audit trail and Find-it evaluation story.
 
 ## Spoken Script
 
@@ -132,7 +133,7 @@ This is what I mean by bounded money actions. The LLM can talk, but the commerce
 
 I also split the work into Linear tickets so the architecture is inspectable: intent, catalogue grounding, recommendation, growth playbook, offer guardrails, playbook authority, Mandate Lite, Razorpay order creation, payment signature verification, voice adapters, and E2E validation.
 
-The current repo has unit tests and browser journey tests. I also created a future evaluation ticket for a 500-scenario regression suite because the next serious version should measure agent decision quality across many synthetic cases, not just one polished demo."
+The current repo has unit tests, browser journey tests, and a Find-it dashboard with 500 synthetic scenarios. It measures whether the engine follows the important rules: no fake products, no unverified claims, playbook-authorized offers only, review-only deals withheld, and checkout blocked when price or stock changes."
 
 ### 5:05 to 5:20 - Close
 
@@ -144,7 +145,7 @@ That is why I think it fits Track 01: growth, agentic commerce, and safe explain
 
 ## Red Flags
 
-- The 500-scenario evaluation dashboard is not implemented. Do not present it as built.
+- The 500-scenario Find-it dashboard is synthetic engine evaluation, not production customer analytics.
 - Current persistence is local/browser-based, not production database-backed.
 - Merchant authentication and webhook-backed payment state are future work.
 
@@ -161,3 +162,5 @@ That is why I think it fits Track 01: growth, agentic commerce, and safe explain
 - `docs/linear-workspace-reconstruction.md`
 - `src/data/catalog.ts`
 - `src/data/growthRules.ts`
+- `src/lib/evaluation/findItScenarios.ts`
+- `src/app/findit/page.tsx`

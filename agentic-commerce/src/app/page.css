@@ -258,6 +258,257 @@
 .tone-yellow { background: #f7de7b; }
 .tone-blue { background: #bed8f2; }
 .tone-rose { background: #efc4cf; }
+
+.findit-page {
+  min-height: 100vh;
+  background: #f6f8f4;
+  color: #17201b;
+}
+
+.findit-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 28px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 54px 28px 24px;
+}
+
+.findit-hero h1 {
+  max-width: 860px;
+  margin: 0;
+  font-size: clamp(34px, 4vw, 58px);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.findit-hero span {
+  display: block;
+  max-width: 760px;
+  margin-top: 16px;
+  color: #5a685f;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.findit-score {
+  display: flex;
+  min-height: 210px;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #c9ded1;
+  border-radius: 8px;
+  padding: 24px;
+  background: #e8f6ee;
+}
+
+.findit-score.has-failures {
+  border-color: #efc1a9;
+  background: #fff2ea;
+}
+
+.findit-score span,
+.findit-score small,
+.findit-metrics span,
+.findit-metrics small,
+.findit-heading span,
+.scenario-row small {
+  color: #617066;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.findit-score strong {
+  margin: 4px 0;
+  font-size: 64px;
+  line-height: 1;
+}
+
+.findit-metrics,
+.findit-grid,
+.findit-panel {
+  max-width: 1440px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.findit-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 28px 20px;
+}
+
+.findit-metrics article,
+.findit-panel {
+  border: 1px solid #dfe4de;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.findit-metrics article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 10px;
+  padding: 18px;
+}
+
+.findit-metrics article svg {
+  grid-row: span 2;
+  color: #1d57e7;
+}
+
+.findit-metrics strong {
+  font-size: 27px;
+}
+
+.findit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 18px;
+  padding: 0 28px 18px;
+}
+
+.findit-panel {
+  padding: 22px;
+}
+
+.findit-page > .findit-panel {
+  margin-bottom: 42px;
+}
+
+.findit-heading,
+.findit-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.findit-heading {
+  margin-bottom: 18px;
+}
+
+.findit-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.findit-heading svg {
+  color: #1d57e7;
+}
+
+.category-results {
+  display: grid;
+  gap: 12px;
+}
+
+.category-results > div {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 78px minmax(160px, 0.8fr) 74px;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid #eef1ed;
+  padding: 0 0 12px;
+}
+
+.category-results > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.category-results span,
+.category-results strong {
+  font-size: 14px;
+}
+
+.category-results div div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7ece8;
+}
+
+.category-results i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #208c55;
+}
+
+.findit-proof-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: #39483f;
+  line-height: 1.45;
+}
+
+.findit-note {
+  margin: 18px 0 0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f3f6f2;
+  color: #526159;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.scenario-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #e1e6df;
+  border-radius: 8px;
+}
+
+.scenario-row {
+  display: grid;
+  grid-template-columns: 96px 150px minmax(220px, 1fr) minmax(260px, 1.2fr) 92px;
+  gap: 14px;
+  align-items: start;
+  border-bottom: 1px solid #edf1ec;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.scenario-row:last-child {
+  border-bottom: 0;
+}
+
+.scenario-head {
+  background: #f5f7f3;
+  color: #54635a;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.scenario-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.scenario-row strong,
+.scenario-row small {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .findit-hero,
+  .findit-grid,
+  .findit-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-table {
+    overflow-x: auto;
+  }
+
+  .scenario-row {
+    min-width: 860px;
+  }
+}
 .tone-coral { background: #f0b8a5; }
 
 .product-copy {

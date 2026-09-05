@@ -36,6 +36,16 @@ test("landing is separate and an unsupported request never enters the cart", asy
   await expect(page.getByRole("link", { name: "Open cart" })).toContainText("0");
 });
 
+test("Find-it dashboard renders the 500-scenario evaluation", async ({ page }) => {
+  await page.goto("/findit");
+
+  await expect(page.getByRole("heading", { name: /Find-it checks/ })).toBeVisible();
+  await expect(page.getByText("500").first()).toBeVisible();
+  await expect(page.getByText("500/500 scenarios passed")).toBeVisible();
+  await expect(page.getByText("Catalog grounding").first()).toBeVisible();
+  await expect(page.getByText("Review-only deals").first()).toBeVisible();
+});
+
 test("buyer choice, playbook auto-approval, and price-change guard run in order", async ({ page }) => {
   await signIn(page);
   await startGiftSession(page);
