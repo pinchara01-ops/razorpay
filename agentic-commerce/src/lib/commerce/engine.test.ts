@@ -4,10 +4,10 @@ import {
   approveFinalCart,
   checkCheckout,
   decideBuyerOffer,
-  decideMerchantOffer,
   getClarifyingQuestion,
   overrideProductPrice,
   reevaluateGrowthPlaybook,
+  requestGrowthReview,
   selectRecommendedProduct,
   startCommerceSession
 } from "@/lib/commerce/engine";
@@ -37,22 +37,46 @@ describe("commerce session engine", () => {
 
     expect(selected.activeCart).toHaveLength(1);
     expect(selected.sessionEvents.some((event) => event.type === "add_to_cart")).toBe(true);
-    expect(selected.offerDecision).toBe("pending_merchant");
+    expect(selected.offerDecision).toBe("available_to_buyer");
   });
 
-  it("runs merchant approval, buyer offer choice, and exact-cart approval in order", () => {
+  it("runs buyer offer choice and exact-cart approval in order after playbook auto-approval", () => {
     const { selected } = chooseFirstRecommendation("Gift for my brother under 1000, oily skin");
-    const merchantApproved = decideMerchantOffer(selected, true);
-    expect(merchantApproved.offerDecision).toBe("available_to_buyer");
-    expect(merchantApproved.activeCart).toEqual(selected.activeCart);
+    expect(selected.offerDecision).toBe("available_to_buyer");
 
-    const buyerAccepted = decideBuyerOffer(merchantApproved, true);
+    const buyerAccepted = decideBuyerOffer(selected, true);
     expect(buyerAccepted.offerDecision).toBe("buyer_accepted");
     expect(buyerAccepted.activeCart).toEqual(buyerAccepted.offer?.finalCart);
 
     const buyerApproved = approveFinalCart(buyerAccepted, catalog);
     expect(buyerApproved.status).toBe("buyer_approved");
     expect(buyerApproved.mandate?.approvedAmount).toBe(buyerApproved.offer?.finalAmount);
+  });
+
+  it("keeps only the buyer-selected cart when an offer is declined", () => {
+    const { selected } = chooseFirstRecommendation("Build me a simple day routine under 2000 for oily skin");
+    expect(selected.offerDecision).toBe("available_to_buyer");
+    expect(selected.activeCart).toHaveLength(1);
+
+    const declined = decideBuyerOffer(selected, false);
+
+    expect(declined.offerDecision).toBe("buyer_declined");
+    expect(declined.activeCart).toEqual(selected.activeCart);
+  });
+
+  it("withholds buyer-requested big deals for merchant review instead of auto-approval", () => {
+    const started = startCommerceSession("Gift for my brother under 2500, oily skin", catalog);
+    const starter = started.recommendation.recommendedItems.find((item) => item.productId === "bundle-oily-starter");
+    expect(starter).toBeTruthy();
+    const selected = selectRecommendedProduct(started, starter!.productId, catalog, growthRules);
+
+    const reviewed = requestGrowthReview(selected, "give me the biggest deal possible under 2500", catalog, growthRules);
+
+    expect(reviewed.offer?.signal.type).toBe("deal_request");
+    expect(reviewed.offer?.riskLevel).toBe("high");
+    expect(reviewed.offer?.approvalMode).toBe("review_only");
+    expect(reviewed.offerDecision).toBe("blocked");
+    expect(reviewed.status).toBe("awaiting_buyer_approval");
   });
 
   it("uses the merchant playbook as an input rather than a fixed internal rule", () => {
@@ -76,7 +100,7 @@ describe("commerce session engine", () => {
     expect(starter).toBeTruthy();
 
     const selected = selectRecommendedProduct(started, starter!.productId, catalog, growthRules);
-    expect(selected.offer?.approvalMode).toBe("pre_approved");
+    expect(selected.offer?.approvalMode).toBe("auto_approved");
     expect(selected.offerDecision).toBe("available_to_buyer");
     expect(selected.activeCart).toEqual([starter]);
   });
@@ -123,8 +147,7 @@ describe("commerce session engine", () => {
 
   it("blocks checkout when catalog price changes after buyer approval", () => {
     const { selected } = chooseFirstRecommendation("Gift for my brother under 1000, oily skin");
-    const merchantApproved = decideMerchantOffer(selected, true);
-    const buyerAccepted = decideBuyerOffer(merchantApproved, true);
+    const buyerAccepted = decideBuyerOffer(selected, true);
     const buyerApproved = approveFinalCart(buyerAccepted, catalog);
     const productId = buyerApproved.activeCart[0].productId;
     const currentPrice = catalog.find((product) => product.id === productId)?.price ?? 0;

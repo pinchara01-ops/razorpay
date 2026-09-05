@@ -455,14 +455,15 @@ Primary demo behavior:
 
 - detect gift intent
 - identify a safe gift-note cross-sell
-- speak a friendly voice-style proposal to the merchant
-- get merchant approval
+- check the Growth Playbook authority mode
+- auto-show allowed offers to the buyer
+- log review-only or unsafe opportunities to the merchant console
 - show the buyer the final cart
 - require buyer approval before Razorpay order creation
 
 Voice tone:
 
-> Tiny revenue moment spotted. This shopper is buying a gift for their brother. Cart is INR 749, budget is INR 1000. A INR 99 gift note keeps the cart within budget and makes the gift feel complete. Want me to offer it?
+> Growth moment logged. This shopper asked for a bigger deal. The proposed bundle fits the budget, but this boundary is review-only, so it was withheld from the buyer. Review the playbook if this should become automatic for future sessions.
 
 ### Growth Playbook
 
@@ -481,20 +482,21 @@ The Growth Playbook should define:
 - max offers per session
 - discount or margin limits where applicable
 
-### Hybrid Approval
+### Playbook Authority
 
-Offer approval should be hybrid:
+Offer authority should come from the merchant-configured playbook:
 
-- low-risk playbook offers may be pre-approved if they pass guardrails
-- risky or margin-sensitive offers require live merchant approval
+- auto-approved playbook offers may be shown to the buyer if they pass guardrails
+- review-only or unsafe offers are withheld and logged for the merchant
+- merchants change the playbook for future sessions instead of approving one live cart
 - buyer approval is always required before Razorpay order creation
 
 Examples:
 
-- gift-note cross-sell under budget: can be pre-approved or live-approved for demo
-- bundle switch that saves the buyer money: can be pre-approved
-- discount: live merchant approval required
-- high-value upsell: live merchant approval required
+- gift-note cross-sell under budget: can be auto-approved by the playbook
+- bundle switch that stays inside a safe boundary: can be auto-approved
+- discount: review-only unless explicitly auto-approved with strict limits
+- high-value upsell: review-only unless explicitly auto-approved with strict limits
 - unsupported claim: blocked, not approvable
 
 ### Human Approval Screen

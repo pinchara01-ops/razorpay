@@ -40,7 +40,7 @@ This audit maps the architecture diagram to executable code. `Implemented` means
 - Merchant approval only makes an offer available; it does not mutate the cart.
 - Buyer acceptance changes the proposed cart, then one contextual text/voice approval or explicit control creates Mandate Lite, creates the Razorpay order, and opens Checkout without requiring `/cart` navigation.
 - A catalog price change before approval makes the cart stale and blocks Razorpay order creation.
-- A low-risk pre-approved rule bypasses live merchant approval but still waits for buyer choice.
+- A low-risk auto-approved rule can reach the buyer after playbook and guardrail checks, while review-only opportunities are withheld and logged.
 - OpenAI structured output produces canonical buyer intent while deterministic modules retain money authority.
 - The approved happy path creates a Razorpay test-mode order and opens hosted Checkout without a second application-owned click.
 - Exact payment signatures are accepted and tampered signatures are rejected.

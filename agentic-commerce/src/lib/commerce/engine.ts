@@ -28,9 +28,8 @@ function sessionId() {
   return `session_${Date.now().toString(36)}`;
 }
 
-function experimentVariant(id: string) {
-  const bucket = Array.from(id).reduce((total, character) => total + character.charCodeAt(0), 0);
-  return bucket % 7 === 0 ? "control" : "treatment";
+function experimentVariant(): "treatment" {
+  return "treatment";
 }
 
 function createOfferObservation(
@@ -53,7 +52,6 @@ function createOfferObservation(
 }
 
 function statusForOffer(decision: OfferDecision): CommerceSessionStatus {
-  if (decision === "pending_merchant") return "awaiting_merchant";
   if (decision === "available_to_buyer") return "awaiting_buyer_offer";
   return "awaiting_buyer_approval";
 }
@@ -93,7 +91,7 @@ export function startCommerceSession(prompt: string, products: Product[] = produ
   const id = sessionId();
   const experiment = {
     id: "growth-offer-v1",
-    variant: experimentVariant(prompt),
+    variant: experimentVariant(),
     assignedAt: timestamp
   } as const;
   const auditEvents = [
@@ -152,7 +150,7 @@ function evaluateGrowth(
   if (treatmentOffer && session.experiment.variant === "control") offerDecision = "blocked";
   if (offer && !offerGuardrails.passed) offerDecision = "blocked";
   if (offer && offerGuardrails.passed) {
-    offerDecision = offer.approvalMode === "pre_approved" ? "available_to_buyer" : "pending_merchant";
+    offerDecision = offer.approvalMode === "auto_approved" ? "available_to_buyer" : "blocked";
   }
 
   return { growthSignals, offer, offerGuardrails, offerDecision, withheldOffer: treatmentOffer && session.experiment.variant === "control" ? treatmentOffer : null };
@@ -219,8 +217,8 @@ export function selectRecommendedProduct(
     auditEvents.push(
       createAuditEvent({
         actor: "system",
-        action: "playbook_offer_pre_approved",
-        summary: "An enabled low-risk rule made the offer available. It has not changed the cart.",
+        action: "playbook_offer_auto_approved",
+        summary: "An enabled low-risk boundary made the offer available. It has not changed the cart.",
         tone: "success",
         data: { offerId: growth.offer?.id, source: growth.offer?.source, evidence: growth.offer?.evidence, boundaryId: growth.offer?.ruleId }
       })
@@ -285,23 +283,82 @@ export function reevaluateGrowthPlaybook(
   };
 }
 
-export function decideMerchantOffer(session: CommerceSession, approved: boolean): CommerceSession {
-  if (!session.offer || session.offerDecision !== "pending_merchant") return session;
+export function requestGrowthReview(
+  session: CommerceSession,
+  message: string,
+  products: Product[],
+  rules: GrowthRule[] = growthPolicyRepository.list()
+): CommerceSession {
+  if (session.activeCart.length === 0 || session.mandate || session.checkout) return session;
+  const sessionEvents = [
+    ...session.sessionEvents,
+    createSessionEvent({ type: "chat_message", value: message })
+  ];
+  const growth = evaluateGrowth(session, products, rules, sessionEvents, session.activeCart);
+  const sessionGrowth = {
+    growthSignals: growth.growthSignals,
+    offer: growth.offer,
+    offerGuardrails: growth.offerGuardrails,
+    offerDecision: growth.offerDecision
+  };
 
-  const offerDecision: OfferDecision = approved ? "available_to_buyer" : "merchant_rejected";
+  return {
+    ...session,
+    ...sessionGrowth,
+    sessionEvents,
+    status: statusForOffer(growth.offerDecision),
+    auditEvents: [
+      ...session.auditEvents,
+      createAuditEvent({
+        actor: "buyer",
+        action: "buyer_requested_growth_review",
+        summary: message,
+        tone: "warning",
+        data: { message }
+      }),
+      createAuditEvent({
+        actor: "system",
+        action: growth.offerDecision === "blocked" && growth.offer?.approvalMode === "review_only" ? "growth_offer_logged_for_playbook_review" : growth.offerDecision === "blocked" ? "growth_offer_blocked" : growth.offer ? "growth_offer_validated" : "growth_offer_not_found",
+        summary: growth.offer
+          ? growth.offer.approvalMode === "review_only"
+            ? "The requested deal is outside automatic execution, so it was withheld from the buyer and logged for merchant review."
+            : growth.offer.safetySummary
+          : growth.withheldOffer
+            ? "Session is in the experiment control group, so an eligible offer was measured but not shown."
+            : "No enabled Growth Playbook boundary matched the buyer's requested deal.",
+        tone: growth.offerDecision === "blocked" ? "danger" : growth.offer ? "warning" : "info",
+        data: {
+          offer: growth.offer,
+          withheldOffer: growth.withheldOffer,
+          checks: growth.offerGuardrails.checks,
+          source: growth.offer?.source ?? growth.withheldOffer?.source,
+          opportunityReason: growth.offer?.opportunityReason ?? growth.withheldOffer?.opportunityReason,
+          evidence: growth.offer?.evidence ?? growth.withheldOffer?.evidence,
+          boundaryId: growth.offer?.ruleId ?? growth.withheldOffer?.ruleId
+        }
+      })
+    ],
+    updatedAt: now()
+  };
+}
+
+export function decideMerchantOffer(session: CommerceSession, approved: boolean): CommerceSession {
+  if (!session.offer || session.offerDecision !== "blocked" || session.offer.approvalMode !== "review_only") return session;
+
+  const offerDecision: OfferDecision = approved ? "blocked" : "merchant_rejected";
   return {
     ...session,
     offerDecision,
-    status: approved ? "awaiting_buyer_offer" : "awaiting_buyer_approval",
+    status: "awaiting_buyer_approval",
     updatedAt: now(),
     auditEvents: [
       ...session.auditEvents,
       createAuditEvent({
         actor: "merchant",
-        action: approved ? "merchant_approved_offer" : "merchant_rejected_offer",
+        action: approved ? "merchant_marked_reviewed" : "merchant_rejected_offer",
         summary: approved
-          ? "Merchant approved presenting the guarded offer. The buyer must still accept it."
-          : "Merchant rejected the offer. The original cart remains unchanged.",
+          ? "Merchant reviewed this withheld opportunity. Future sessions need a playbook change before buyers can see it."
+          : "Merchant rejected the withheld opportunity. The original cart remains unchanged.",
         tone: approved ? "success" : "info",
         data: { offerId: session.offer.id, approvalMode: session.offer.approvalMode, source: session.offer.source, evidence: session.offer.evidence, boundaryId: session.offer.ruleId }
       })
@@ -312,7 +369,7 @@ export function decideMerchantOffer(session: CommerceSession, approved: boolean)
 export function decideBuyerOffer(session: CommerceSession, accepted: boolean): CommerceSession {
   if (!session.offer || session.offerDecision !== "available_to_buyer") return session;
 
-  const activeCart = accepted ? session.offer.finalCart : session.recommendation.recommendedItems;
+  const activeCart = accepted ? session.offer.finalCart : session.activeCart;
   return {
     ...session,
     offerDecision: accepted ? "buyer_accepted" : "buyer_declined",
@@ -343,15 +400,13 @@ export function decideBuyerOffer(session: CommerceSession, accepted: boolean): C
 }
 
 export function continueWithoutOffer(session: CommerceSession): CommerceSession {
-  if (!session.offer || !["pending_merchant", "available_to_buyer"].includes(session.offerDecision)) return session;
+  if (!session.offer || session.offerDecision !== "available_to_buyer") return session;
 
   return {
     ...session,
     offerDecision: "buyer_declined",
     status: "awaiting_buyer_approval",
-    activeCart: session.recommendation.recommendedItems.filter((item) =>
-      session.activeCart.some((activeItem) => activeItem.productId === item.productId)
-    ),
+    activeCart: session.activeCart,
     updatedAt: now(),
     auditEvents: [
       ...session.auditEvents,

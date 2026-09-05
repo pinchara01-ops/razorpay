@@ -4,7 +4,7 @@ Date: 2026-09-03
 
 ## Final Idea
 
-We are building a reusable agentic commerce engine for Razorpay merchants. The retail site remains a normal catalogue until a signed-in buyer deliberately opens the guided shopping agent. The agent turns a vague need into grounded product options, not an automatic cart. Only the buyer's product choice creates cart events and starts growth evaluation. The merchant-configured Growth Playbook can then suggest safe upsells, cross-sells, bundle switches, or offers. Every offer and payment action passes deterministic guardrails, uses hybrid merchant approval where needed, requires buyer approval for the final cart, creates a Razorpay test-mode order, and logs the full audit trail.
+We are building a reusable agentic commerce engine for Razorpay merchants. The retail site remains a normal catalogue until a signed-in buyer deliberately opens the guided shopping agent. The agent turns a vague need into grounded product options, not an automatic cart. Only the buyer's product choice creates cart events and starts growth evaluation. The merchant-configured Growth Playbook is the authority for growth actions: auto-approved boundaries may be shown to buyers, while review-only or unsafe opportunities are withheld and logged for the merchant. Every offer and payment action passes deterministic guardrails, requires buyer approval for the final cart, creates a Razorpay test-mode order, and logs the full audit trail.
 
 ## Mermaid Architecture
 
@@ -52,17 +52,16 @@ flowchart TD
     OfferEngine --> OfferGuardrails[Offer Guardrails]
     OfferGuardrails --> Safe{Safe offer?}
     Safe -- No --> BlockOffer[Block and explain]
-    Safe -- Yes --> Mode{Approval mode}
-    Mode -- Pre-approved rule --> BuyerOffer
+    Safe -- Yes --> Mode{Playbook authority}
+    Mode -- Auto-approved boundary --> BuyerOffer
+    Mode -- Review-only boundary --> Withhold[Withhold from buyer and log]
   end
 
   subgraph MerchantConsole[GlowCart Merchant Console]
-    Mode -- Live approval --> Copilot[Growth Copilot Inbox]
+    Withhold --> Copilot[Growth Review Log]
+    Playbook --> Config[Merchant edits future boundaries]
     Copilot --> Voice[ElevenLabs or Browser Voice]
     Voice --> Merchant[Merchant]
-    Merchant --> MerchantDecision{Make offer available?}
-    MerchantDecision -- Yes --> BuyerOffer
-    MerchantDecision -- No --> DraftCart
     Audit[Audit Trail] --> Dashboard[Operations Dashboard]
   end
 
@@ -80,7 +79,7 @@ flowchart TD
   Store --- CommerceEngine
   Rec --> Audit
   OfferEngine --> Audit
-  MerchantDecision --> Audit
+  Withhold --> Audit
   BuyerOffer --> Audit
   Mandate --> Audit
   BlockOffer --> Audit
@@ -132,7 +131,7 @@ Does not:
 
 - Track external browsing.
 - Chase abandoned carts as the main workflow.
-- Approve risky offers without merchant approval.
+- Show review-only or unsafe opportunities to the buyer.
 - Replace buyer approval.
 
 ### Offer Engine
@@ -195,7 +194,7 @@ This is our hackathon-sized version of agent-payment authorization.
 | Growth moment detection | Find gift intent, routine gaps, bundle opportunities | TypeScript rules |
 | Offer decision | Choose eligible cross-sell/upsell/bundle/discount | Editable Growth Playbook + product graph passed into the engine |
 | Offer safety | Block irrelevant, over-budget, unsupported, or risky offers | Deterministic guardrails |
-| Merchant approval | Approve risky or demo-highlight offers | Admin UI + voice proposal |
+| Merchant console | Configure playbook boundaries and review logs | Admin UI + voice/readout of withheld opportunities |
 | Voice | Let buyers speak and hear the commerce conversation; voice the merchant brief | OpenAI audio transcription + ElevenLabs TTS; browser TTS fallback |
 | Buyer approval | Confirm final cart and exact amount inside GlowGuide; keep `/cart` optional | Context-bound text/voice approval or explicit button + Mandate Lite |
 | Payment action | Create test-mode payment order | Razorpay Orders API |
@@ -255,8 +254,8 @@ If the buyer is building a day routine and cart has no sunscreen, propose sunscr
 Bundle switch:
 If separate items are available as a better bundle, propose switching to the bundle.
 
-Discount:
-Require live merchant approval unless explicitly preconfigured with strict margin and usage limits.
+Discount or high-risk deal:
+Withhold from the buyer and log it unless the merchant has explicitly configured it as an auto-approved boundary with strict margin and usage limits.
 ```
 
 ## Voice Decision
@@ -270,10 +269,10 @@ Recommended:
 
 Voice is an input/output adapter, not the money authority. A transcribed approval is accepted only while GlowGuide is presenting a specific final cart and exact total; deterministic guardrails still decide whether checkout may proceed.
 
-Voice proposal template:
+Voice review template:
 
 ```text
-Tiny revenue moment spotted. This shopper is buying a gift for their brother. Cart is INR 749, budget is INR 1000. A INR 99 gift note keeps the cart within budget and makes the gift feel complete. Want me to offer it?
+Growth opportunity withheld. This shopper asked for a bigger deal. The proposed bundle fits the budget, but this boundary is review-only, so it was not shown to the buyer. Review the playbook if this should be automatic in future sessions.
 ```
 
 ## Implementation Status
@@ -286,7 +285,7 @@ Tiny revenue moment spotted. This shopper is buying a gift for their brother. Ca
 | Structured intent and recommendation | Implemented; unsupported requests return no match instead of a fallback product |
 | Buyer product choice before cart creation | Implemented; recommendations never auto-add themselves |
 | Session events, growth detector, editable playbook, offer guardrails | Implemented and scenario-tested |
-| Hybrid merchant approval | Implemented; approval only makes an offer available to the buyer |
+| Playbook authority and review-only logging | Implemented; auto-approved offers can reach the buyer, review-only opportunities are withheld and logged |
 | Buyer offer choice and exact-cart approval | Implemented in GlowGuide by contextual text, transcribed voice, or explicit control; `/cart` remains optional |
 | Mandate Lite and checkout integrity checks | Implemented |
 | Razorpay test order creation | Connected and verified in test mode; mock adapter remains available without credentials |

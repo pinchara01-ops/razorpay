@@ -340,26 +340,26 @@ High. This is the boundary between AI suggestion and buyer-visible commerce acti
 Status: Done
 Priority: High
 Labels: `frontend`, `growth`, `commerce`
-Evidence: `src/lib/commerce/engine.ts`, `src/app/merchant/page.tsx`, `docs/adr/0001-hybrid-offer-approval.md`, commit `27bfb8e`
+Evidence: `src/lib/commerce/engine.ts`, `src/app/merchant/page.tsx`, `docs/adr/0001-playbook-authority.md`, commit `27bfb8e`
 
 Problem:
-Live merchant approval is memorable and safe, but requiring it for every low-risk offer does not scale.
+The buyer flow should not wait for a merchant to approve individual offers. The merchant should configure authority once through the Growth Playbook.
 
 Implementation:
-The engine sets offer status based on risk and playbook approval mode. Low-risk pre-approved offers go to buyer review; live approval offers wait in the merchant console. Merchant approval only makes an offer available, it does not mutate the buyer cart.
+The engine sets offer status based on the Growth Playbook authority mode. Auto-approved offers go to buyer review when guardrails pass. Review-only or unsafe opportunities are withheld from the buyer and logged in the merchant console.
 
 Acceptance criteria:
-- Pending merchant offers do not change buyer cart.
-- Merchant approval exposes offer to buyer.
-- Merchant rejection leaves original cart unchanged.
+- Review-only offers do not change buyer cart.
+- Review-only offers are visible in merchant logs.
+- Merchant can change playbook rules for future sessions.
 - Buyer approval remains mandatory.
 
 Verification:
-- Unit tests cover merchant approval and buyer offer choice.
-- ADR documents the hybrid approval tradeoff.
+- Unit tests cover playbook auto-approval, review-only withholding, and buyer offer choice.
+- ADR documents the playbook authority tradeoff.
 
 Risk:
-High. Merchant gates are part of bounded money-action design.
+High. Playbook authority is part of bounded money-action design.
 
 ### 12. Buyer Offer Choice And Exact-Cart Approval
 
@@ -607,12 +607,12 @@ Problem:
 Unit tests do not prove that the buyer, merchant, cart, and Razorpay browser flow work together.
 
 Implementation:
-Playwright covers landing separation, sign-in, unsupported phone request, merchant approval, price-change failure, playbook mutation, visible voice controls, conversational approval, and Razorpay Checkout opening.
+Playwright covers landing separation, sign-in, unsupported phone request, playbook auto-approval, price-change failure, playbook mutation, visible voice controls, conversational approval, and Razorpay Checkout opening.
 
 Acceptance criteria:
 - E2E suite runs against local app.
 - No-match request does not create cart.
-- Merchant approval path works.
+- Playbook auto-approval path works.
 - Price mutation blocks checkout.
 - Razorpay Checkout opens from GlowGuide.
 

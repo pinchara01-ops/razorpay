@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Clock3, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
 import { getCartTotal, hydrateCartItems } from "@/lib/cart";
 import {
   applyPriceOverrides,
   approveFinalCart,
   checkCheckout,
-  continueWithoutOffer,
   decideBuyerOffer,
   recordCheckoutBlocked,
   recordCheckoutResult,
@@ -47,10 +46,6 @@ export default function CartPage() {
 
   function chooseOffer(accepted: boolean) {
     if (session) persist(decideBuyerOffer(session, accepted));
-  }
-
-  function skipOffer() {
-    if (session) persist(continueWithoutOffer(session));
   }
 
   async function approveCartAndContinue() {
@@ -131,8 +126,8 @@ export default function CartPage() {
             <strong>{formatINR(unitAmount * quantity)}</strong>
           </article> : null)}
 
-          {session?.offerDecision === "pending_merchant" && session.offer ? <section className="cart-offer pending">
-            <Clock3 size={20} /><div><strong>Optional offer awaiting merchant review</strong><p>Your selected item is ready. The pending offer has not changed your cart.</p></div><button onClick={skipOffer}>Continue without offer</button>
+          {session?.offerDecision === "blocked" && session.offer?.approvalMode === "review_only" ? <section className="cart-offer pending">
+            <ShieldCheck size={20} /><div><strong>Offer withheld by Growth Playbook</strong><p>A larger growth idea was logged for merchant review, but it was not shown or applied to your cart.</p></div>
           </section> : null}
 
           {session?.offerDecision === "available_to_buyer" && session.offer ? <section className="cart-offer">

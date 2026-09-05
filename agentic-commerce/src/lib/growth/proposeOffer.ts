@@ -5,11 +5,12 @@ import { formatINR } from "@/lib/money";
 import type { BuyerIntent, GrowthOpportunityCandidate, GrowthRule, OfferProposal, Product } from "@/lib/types";
 
 function valueScore(candidate: GrowthOpportunityCandidate) {
+  const explicitDealScore = candidate.signal.type === "deal_request" ? 250 : 0;
   const evidenceScore = candidate.source === "historical_pattern" ? 100 : 0;
   const liftScore = (candidate.evidence.lift ?? 0) * 30;
   const confidenceScore = (candidate.evidence.confidence ?? candidate.signal.confidence) * 20;
   const marginScore = candidate.incrementalMarginPercent * 0.5;
-  return evidenceScore + liftScore + confidenceScore + marginScore + Math.max(candidate.addedAmount, 0) / 10000;
+  return explicitDealScore + evidenceScore + liftScore + confidenceScore + marginScore + Math.max(candidate.addedAmount, 0) / 10000;
 }
 
 function buildOffer(candidate: GrowthOpportunityCandidate, boundary: GrowthRule, intent: BuyerIntent, cartAmount: number): OfferProposal {

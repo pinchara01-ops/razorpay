@@ -8,9 +8,9 @@ export const growthRules: GrowthRule[] = [
     allowedOfferTypes: ["cross_sell", "upsell", "bundle_switch"],
     allowedCategories: ["skincare", "bundle"],
     approvalByRisk: {
-      low: "pre_approved",
-      medium: "live_merchant_approval",
-      high: "live_merchant_approval"
+      low: "auto_approved",
+      medium: "review_only",
+      high: "review_only"
     },
     maxOffersPerSession: 1,
     maxAddedAmount: 60000,
@@ -30,15 +30,15 @@ export const growthRules: GrowthRule[] = [
     allowedOfferTypes: ["cross_sell"],
     allowedCategories: ["accessory"],
     approvalByRisk: {
-      low: "live_merchant_approval",
-      medium: "live_merchant_approval",
-      high: "live_merchant_approval"
+      low: "auto_approved",
+      medium: "review_only",
+      high: "review_only"
     },
     maxOffersPerSession: 1,
     minCartAmount: 50000,
     maxAddedAmount: 15000,
     minMarginPercent: 50,
-    explanation: "Allows small gift add-ons, but keeps a human gate because personalized items can affect trust.",
+    explanation: "Allows small gift add-ons when they stay inside budget, stock, and margin limits.",
     constraints: {
       mustStayWithinBuyerBudget: true,
       productMustBeInStock: true,
@@ -53,9 +53,9 @@ export const growthRules: GrowthRule[] = [
     allowedOfferTypes: ["discount"],
     allowedCategories: ["skincare", "bundle", "accessory"],
     approvalByRisk: {
-      low: "live_merchant_approval",
-      medium: "live_merchant_approval",
-      high: "live_merchant_approval"
+      low: "review_only",
+      medium: "review_only",
+      high: "review_only"
     },
     maxOffersPerSession: 1,
     minCartAmount: 100000,

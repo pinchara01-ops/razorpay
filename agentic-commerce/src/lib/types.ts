@@ -126,7 +126,7 @@ export type SessionEvent =
 
 export type GrowthSignal = {
   id: string;
-  type: "gift_intent" | "routine_gap" | "catalog_cross_sell" | "bundle_opportunity" | "checkout_hesitation";
+  type: "gift_intent" | "routine_gap" | "catalog_cross_sell" | "bundle_opportunity" | "checkout_hesitation" | "deal_request";
   summary: string;
   confidence: number;
   source: GrowthEvidenceSource;
@@ -134,7 +134,7 @@ export type GrowthSignal = {
 };
 
 export type OfferType = "cross_sell" | "upsell" | "bundle_switch" | "discount";
-export type ApprovalMode = "pre_approved" | "live_merchant_approval";
+export type ApprovalMode = "auto_approved" | "review_only";
 export type RiskLevel = "low" | "medium" | "high";
 export type GrowthEvidenceSource = "historical_pattern" | "cold_start_hypothesis";
 export type ExperimentVariant = "control" | "treatment";
@@ -208,7 +208,6 @@ export type OfferProposal = {
 export type OfferDecision =
   | "none"
   | "blocked"
-  | "pending_merchant"
   | "available_to_buyer"
   | "merchant_rejected"
   | "buyer_accepted"
@@ -216,7 +215,6 @@ export type OfferDecision =
 
 export type CommerceSessionStatus =
   | "awaiting_product_choice"
-  | "awaiting_merchant"
   | "awaiting_buyer_offer"
   | "awaiting_buyer_approval"
   | "buyer_approved"

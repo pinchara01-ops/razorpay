@@ -49,7 +49,7 @@ The final demo direction adds a merchant-facing Growth Copilot:
 commerce session events
   -> growth signal detection
   -> Growth Playbook offer proposal
-  -> hybrid merchant approval
+  -> Growth Playbook authority check
   -> buyer approval
   -> Razorpay checkout
   -> audit trail
@@ -528,7 +528,7 @@ Hybrid approval rule:
 
 ```text
 Low-risk playbook offers may be pre-approved.
-Discounts, high-value upsells, margin-sensitive actions, custom bundles, and off-playbook actions need live merchant approval.
+Discounts, high-value upsells, margin-sensitive actions, custom bundles, and off-playbook actions should be review-only unless the merchant explicitly configures them as auto-approved boundaries.
 Buyer approval is always required before checkout.
 ```
 

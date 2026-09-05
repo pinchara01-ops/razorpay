@@ -1,6 +1,6 @@
 # Agentic Commerce
 
-This context describes the language for a Razorpay merchant growth copilot that turns live buyer intent into safe, approved commerce actions.
+This context describes the language for a Razorpay merchant growth copilot that turns live buyer intent into safe, playbook-authorized commerce actions.
 
 ## Language
 
@@ -17,7 +17,7 @@ An AI actor that may express or assist with purchase intent on behalf of a buyer
 _Avoid_: Chatbot
 
 **Growth Copilot**:
-The merchant-facing AI assistant that detects live revenue opportunities, proposes safe offers, and asks for approval when needed.
+The merchant-facing AI assistant that detects live revenue opportunities, proposes safe offers inside configured boundaries, and logs withheld opportunities for review.
 _Avoid_: Cart recovery bot, sales bot
 
 **Commerce Session**:
@@ -49,7 +49,7 @@ A live, in-session opportunity where buyer intent, cart state, and merchant rule
 _Avoid_: Abandoned-cart recovery
 
 **Growth Playbook**:
-The merchant-configured source of truth for which offers are allowed, when they can trigger, and what approvals or constraints they require.
+The merchant-configured source of truth for which offers are allowed, when they can trigger, and whether they are buyer-visible or review-only.
 _Avoid_: LLM knowledge, magic prompt
 
 **Offer**:
@@ -60,12 +60,12 @@ _Avoid_: Nudge when the action changes cart or price
 An offer that is relevant, merchant-configured, within buyer constraints, policy-verified, approval-compliant, and auditable.
 _Avoid_: Personalized offer when safety has not been checked
 
-**Hybrid Approval**:
-The approval model where low-risk playbook offers may be pre-approved by merchant rules, while risky or margin-sensitive offers require live merchant approval.
-_Avoid_: Full automation, manual approval for everything
+**Playbook Authority**:
+The model where the merchant configures offer boundaries ahead of time. Auto-approved boundaries may reach the buyer after guardrails pass; review-only or unsafe opportunities are withheld and logged.
+_Avoid_: Live merchant approval, full automation without boundaries, manual approval for every cart
 
 **Offer Availability**:
-Permission to present a guarded offer to the buyer. Merchant approval changes offer availability, never the buyer's cart.
+Permission to present a guarded offer to the buyer. The Growth Playbook changes offer availability; the buyer still decides whether to accept it.
 _Avoid_: Offer applied, item added
 
 **Buyer Approval**:

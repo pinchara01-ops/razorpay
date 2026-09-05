@@ -22,7 +22,7 @@ import {
   X
 } from "lucide-react";
 import { hydrateCartItems } from "@/lib/cart";
-import { applyPriceOverrides, decideMerchantOffer, overrideProductPrice, reevaluateGrowthPlaybook } from "@/lib/commerce/engine";
+import { applyPriceOverrides, overrideProductPrice, reevaluateGrowthPlaybook } from "@/lib/commerce/engine";
 import { COMMERCE_SESSION_KEY, loadCommerceSession, saveCommerceSession } from "@/lib/commerce/sessionStore";
 import { loadGrowthPlaybook, resetGrowthPlaybook, saveGrowthPlaybook } from "@/lib/growth/playbookStore";
 import { formatINR } from "@/lib/money";
@@ -69,10 +69,6 @@ export default function MerchantConsolePage() {
   function persist(next: CommerceSession) {
     setSession(next);
     saveCommerceSession(next);
-  }
-
-  function decideOffer(approved: boolean) {
-    if (session) persist(decideMerchantOffer(session, approved));
   }
 
   function updateRule(ruleId: string, changes: Partial<Pick<GrowthRule, "enabled">> & { risk?: RiskLevel; approvalMode?: ApprovalMode }) {
@@ -178,14 +174,14 @@ export default function MerchantConsolePage() {
             <div className="merchant-grid">
               <section className="admin-panel span-two">
                 <div className="admin-heading"><div><span className="section-icon"><Sparkles size={18} /></span><div><h2>Latest growth opportunity</h2><p>Live buyer intent matched against your playbook</p></div></div><button className="text-action" onClick={() => setView("opportunities")}>Open inbox <ChevronRight size={16} /></button></div>
-                {session.offer ? <Opportunity session={session} voiceStatus={voiceStatus} onVoice={playVoice} onDecision={decideOffer} /> : <p className="admin-empty">The current cart has no relevant playbook offer.</p>}
+                {session.offer ? <Opportunity session={session} voiceStatus={voiceStatus} onVoice={playVoice} /> : <p className="admin-empty">The current cart has no relevant playbook offer.</p>}
               </section>
 
               <section className="admin-panel">
                 <div className="admin-heading"><div><span className="section-icon"><ShieldCheck size={18} /></span><div><h2>Control status</h2><p>Current money-action gates</p></div></div></div>
                 <div className="control-list">
                   <Control label="Growth decision" passed={!session.offer || session.offerGuardrails.passed} />
-                  <Control label="Merchant decision" passed={session.offerDecision !== "pending_merchant"} />
+                  <Control label="Playbook authority" passed={!session.offer || session.offerDecision !== "blocked" || session.offer.approvalMode === "review_only"} />
                   <Control label="Buyer exact-cart approval" passed={Boolean(session.mandate)} />
                   <Control label="Order creation" passed={session.status === "checkout_complete"} />
                 </div>
@@ -204,7 +200,7 @@ export default function MerchantConsolePage() {
         {session && view === "opportunities" ? (
           <section className="admin-panel">
             <div className="admin-heading"><div><span className="section-icon"><Sparkles size={18} /></span><div><h2>Session {session.id}</h2><p>{session.prompt}</p></div></div><span className={`state-pill state-${session.status}`}>{session.status.replaceAll("_", " ")}</span></div>
-            {session.offer ? <Opportunity session={session} voiceStatus={voiceStatus} onVoice={playVoice} onDecision={decideOffer} /> : <p className="admin-empty">No eligible offer for this session.</p>}
+            {session.offer ? <Opportunity session={session} voiceStatus={voiceStatus} onVoice={playVoice} /> : <p className="admin-empty">No eligible offer for this session.</p>}
             <div className="detail-grid">
               <div><h3>Structured intent</h3><dl><dt>Goal</dt><dd>{session.recommendation.intent.goal}</dd><dt>Budget</dt><dd>{formatINR(session.recommendation.intent.maxAmount)}</dd><dt>Constraints</dt><dd>{session.recommendation.intent.constraints.join(", ") || "None"}</dd></dl></div>
               <div><h3>Recommended cart</h3>{cart.map(({ product, unitAmount }) => <div className="admin-cart-line" key={product?.id}><span>{product?.name}</span><strong>{formatINR(unitAmount)}</strong></div>)}</div>
@@ -227,7 +223,7 @@ export default function MerchantConsolePage() {
                     <span className="risk-low">boundary</span>
                     <div className="rule-controls">
                       <button className={`rule-toggle ${rule.enabled ? "on" : ""}`} role="switch" aria-checked={rule.enabled} onClick={() => updateRule(rule.id, { enabled: !rule.enabled })}><span />{rule.enabled ? "Active" : "Off"}</button>
-                      <select aria-label={`Low-risk approval mode for ${rule.name}`} disabled={!rule.enabled} value={rule.approvalByRisk.low} onChange={(event) => updateRule(rule.id, { risk: "low", approvalMode: event.target.value as ApprovalMode })}><option value="pre_approved">Low risk: pre-approved</option><option value="live_merchant_approval">Low risk: live approval</option></select>
+                      <select aria-label={`Low-risk authority mode for ${rule.name}`} disabled={!rule.enabled} value={rule.approvalByRisk.low} onChange={(event) => updateRule(rule.id, { risk: "low", approvalMode: event.target.value as ApprovalMode })}><option value="auto_approved">Low risk: auto-approved</option><option value="review_only">Low risk: review-only log</option></select>
                     </div>
                   </article>
                 ))}
@@ -254,24 +250,24 @@ function Control({ label, passed }: { label: string; passed: boolean }) {
   return <div className={passed ? "control-pass" : "control-wait"}>{passed ? <Check size={16} /> : <FileClock size={16} />}<span>{label}</span><strong>{passed ? "Complete" : "Waiting"}</strong></div>;
 }
 
-function Opportunity({ session, voiceStatus, onVoice, onDecision }: { session: CommerceSession; voiceStatus: string; onVoice: () => void; onDecision: (approved: boolean) => void }) {
+function Opportunity({ session, voiceStatus, onVoice }: { session: CommerceSession; voiceStatus: string; onVoice: () => void }) {
   if (!session.offer) return null;
-  const pending = session.offerDecision === "pending_merchant";
   const sourceLabel = session.offer.source === "historical_pattern"
     ? `Evidence-backed · ${session.offer.evidence.observationCount} observations`
     : "Cold-start hypothesis";
+  const reviewOnly = session.offer.approvalMode === "review_only";
   return (
     <div className="opportunity-card">
       <div className="opportunity-main">
         <div className="signal-row"><span>{session.offer.signal.type.replaceAll("_", " ")}</span><span>{sourceLabel}</span><span>{Math.round(session.offer.signal.confidence * 100)}% confidence</span><span>{session.offer.riskLevel} risk</span></div>
         <h3>{session.offer.merchantScript}</h3>
-        <p>{session.offer.safetySummary} Boundary checked: {session.offer.boundaryName}. Margin: {Math.round(session.offer.incrementalMarginPercent)}%.</p>
+        <p>{reviewOnly ? "Withheld from buyer because this boundary is review-only. Change the Growth Playbook if this should become automatic in future sessions." : session.offer.safetySummary} Boundary checked: {session.offer.boundaryName}. Margin: {Math.round(session.offer.incrementalMarginPercent)}%.</p>
         <div className="opportunity-amount"><span>Added value <strong>{formatINR(session.offer.addedAmount)}</strong></span><span>Proposed total <strong>{formatINR(session.offer.finalAmount)}</strong></span></div>
       </div>
       <div className="opportunity-actions">
         <button className="voice-button" onClick={onVoice}><Volume2 size={17} /> Hear briefing</button>
         <small>{voiceStatus}</small>
-        {pending ? <><button className="approve-button" onClick={() => onDecision(true)}><Check size={17} /> Make available</button><button className="reject-button" onClick={() => onDecision(false)}><X size={17} /> Decline</button></> : <span className="decision-state"><ShieldCheck size={17} /> {session.offerDecision.replaceAll("_", " ")}</span>}
+        <span className="decision-state"><ShieldCheck size={17} /> {reviewOnly ? "withheld for review" : session.offerDecision.replaceAll("_", " ")}</span>
       </div>
     </div>
   );

@@ -14,15 +14,12 @@ async function startGiftSession(page: Page) {
   await page.getByRole("button", { name: "Gift for my brother under 1000, oily skin" }).click();
   await expect(page.getByText(/catalog-verified option/)).toBeVisible();
   await page.getByRole("button", { name: "Choose" }).first().click();
-  await expect(page.getByText("A merchant-controlled offer is being reviewed.")).toBeVisible();
+  await expect(page.getByText(/Exact total with this offer/)).toBeVisible();
 }
 
-async function approveGiftOffer(page: Page) {
-  await page.goto("/merchant");
-  await expect(page.getByRole("heading", { name: "Latest growth opportunity" })).toBeVisible();
-  await page.getByRole("button", { name: "Make available" }).click();
+async function acceptGiftOfferFromCart(page: Page) {
   await page.goto("/cart");
-  await expect(page.getByText(/Merchant playbook/)).toBeVisible();
+  await expect(page.getByText(/Gift experience boundary/).first()).toBeVisible();
   await page.getByRole("button", { name: "Add", exact: true }).click();
 }
 
@@ -39,10 +36,10 @@ test("landing is separate and an unsupported request never enters the cart", asy
   await expect(page.getByRole("link", { name: "Open cart" })).toContainText("0");
 });
 
-test("buyer choice, merchant approval, and price-change guard run in order", async ({ page }) => {
+test("buyer choice, playbook auto-approval, and price-change guard run in order", async ({ page }) => {
   await signIn(page);
   await startGiftSession(page);
-  await approveGiftOffer(page);
+  await acceptGiftOfferFromCart(page);
 
   await page.goto("/merchant");
   await expect(page.getByText("Integrity test")).toBeVisible();
@@ -60,23 +57,19 @@ test("changing the merchant playbook changes the same cart outcome", async ({ pa
   await page.goto("/merchant");
   await page.getByRole("button", { name: "Growth playbook" }).click();
 
-  const giftRule = page.locator(".rules-table article").filter({ hasText: "Gift note cross-sell" });
+  const giftRule = page.locator(".rules-table article").filter({ hasText: "Gift experience boundary" });
   await expect(giftRule.getByRole("switch")).toHaveAttribute("aria-checked", "true");
   await giftRule.getByRole("switch").click();
   await expect(page.getByText("No enabled rule matched")).toBeVisible();
 
   await page.goto("/cart");
-  await expect(page.getByText(/Merchant playbook/)).toHaveCount(0);
+  await expect(page.getByText(/Gift experience boundary/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Approve .* and continue/ })).toBeVisible();
 });
 
 test("voice controls are visible and conversational approval opens Razorpay from GlowGuide", async ({ page }) => {
   await signIn(page);
   await startGiftSession(page);
-  await page.goto("/merchant");
-  await page.getByRole("button", { name: "Make available" }).click();
-  await page.goto("/shop");
-  await page.locator(".guide-launcher").click();
 
   await expect(page.getByRole("button", { name: "Voice off" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start voice input" })).toBeVisible();

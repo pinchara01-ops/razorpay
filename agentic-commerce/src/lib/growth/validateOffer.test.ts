@@ -15,7 +15,7 @@ describe("growth offer engine", () => {
     const offer = proposeBestOffer(candidates, recommendation.recommendedItems, recommendation.intent, catalog);
 
     expect(offer?.ruleId).toBe("gift-experience-boundary");
-    expect(offer?.approvalMode).toBe("live_merchant_approval");
+    expect(offer?.approvalMode).toBe("auto_approved");
     expect(offer?.source).toBeDefined();
   });
 

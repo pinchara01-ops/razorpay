@@ -32,6 +32,10 @@ function productItem(product: Product): CartItem {
   return { productId: product.id, quantity: 1, unitAmount: product.price };
 }
 
+function asksForBigDeal(text: string) {
+  return /\b(discount|deal|offer|best value|premium|upgrade|bigger|biggest)\b/i.test(text);
+}
+
 export function generateGrowthOpportunities(
   events: SessionEvent[],
   cart: CartItem[],
@@ -43,6 +47,48 @@ export function generateGrowthOpportunities(
   const cartProductIds = new Set(cart.map((item) => item.productId));
   const currentAmount = getCartTotal(cart);
   const hasGiftIntent = ["gift", "brother", "birthday", "present"].some((term) => text.includes(term));
+
+  if (cart.length > 0 && asksForBigDeal(text)) {
+    const premiumBundle = products.find(
+      (product) =>
+        product.category === "bundle" &&
+        product.stock > 0 &&
+        !cartHasProduct(cart, product.id) &&
+        product.price > currentAmount &&
+        product.price <= intent.maxAmount &&
+        (product.useCases.some((useCase) => ["complete routine", "premium gift", "outdoor routine"].includes(useCase)) ||
+          product.attributes.includes("bundle"))
+    );
+
+    if (premiumBundle) {
+      const signal: GrowthSignal = {
+        id: "signal_buyer_requested_big_deal",
+        type: "deal_request",
+        summary: "Buyer explicitly asked for a bigger deal or premium-value bundle.",
+        confidence: 0.76,
+        source: "cold_start_hypothesis",
+        evidence: {
+          explanation: "Heuristic from in-session buyer words such as discount, deal, offer, best value, premium, or upgrade.",
+          observationCount: events.length
+        }
+      };
+      const replacement = [productItem(premiumBundle)];
+      candidates.push({
+        id: `candidate_${signal.id}_${premiumBundle.id}`,
+        signal,
+        offerType: "bundle_switch",
+        riskLevel: "high",
+        proposedItems: replacement,
+        finalCart: replacement,
+        addedAmount: premiumBundle.price - currentAmount,
+        finalAmount: premiumBundle.price,
+        incrementalMarginPercent: candidateMargin(replacement, products),
+        source: signal.source,
+        evidence: signal.evidence,
+        reason: "The buyer asked for a stronger deal, so the engine found a higher-value bundle but marks it high risk for merchant review."
+      });
+    }
+  }
 
   if (hasGiftIntent) {
     const giftAddOn = products.find(
@@ -222,8 +268,9 @@ export function generateGrowthOpportunities(
   }
 
   return candidates.sort((a, b) => {
+    const dealScore = (candidate: GrowthOpportunityCandidate) => candidate.signal.type === "deal_request" ? 2 : 0;
     const sourceScore = (candidate: GrowthOpportunityCandidate) => candidate.source === "historical_pattern" ? 1 : 0;
-    return sourceScore(b) - sourceScore(a) || b.incrementalMarginPercent - a.incrementalMarginPercent || b.signal.confidence - a.signal.confidence;
+    return dealScore(b) - dealScore(a) || sourceScore(b) - sourceScore(a) || b.incrementalMarginPercent - a.incrementalMarginPercent || b.signal.confidence - a.signal.confidence;
   });
 }
 

@@ -10,12 +10,12 @@ import {
   applyPriceOverrides,
   approveFinalCart,
   checkCheckout,
-  continueWithoutOffer,
   decideBuyerOffer,
   getClarifyingQuestion,
   recordCheckoutBlocked,
   recordCheckoutResult,
   recordPaymentVerification,
+  requestGrowthReview,
   selectRecommendedProduct,
   startCommerceSession
 } from "@/lib/commerce/engine";
@@ -66,6 +66,14 @@ function isNegative(text: string) {
 
 function isFinishedCommerceSession(current: CommerceSession | null) {
   return Boolean(current && ["checkout_complete", "payment_complete", "checkout_blocked"].includes(current.status));
+}
+
+function isDealRequest(text: string) {
+  return /\b(discount|deal|offer|best value|premium|upgrade|bigger|biggest)\b/i.test(text);
+}
+
+function isNewShoppingRequest(text: string) {
+  return /\b(i want|i need|build me|find me|show me|looking for|buy|gift for|routine|phone|cleanser|moisturizer|sunscreen)\b/i.test(text);
 }
 
 export default function ShopPage() {
@@ -302,7 +310,15 @@ export default function ShopPage() {
     const buyerText = text.trim();
     if (!buyerText || isThinking) return;
     const buyerMessage: ChatMessage = { id: `buyer_${Date.now()}`, role: "buyer", text: buyerText };
-    const startsFreshSearch = isFinishedCommerceSession(session) && !isAffirmative(buyerText);
+    const startsFreshSearch = Boolean(
+      session &&
+      !isAffirmative(buyerText) &&
+      !isNegative(buyerText) &&
+      (isFinishedCommerceSession(session) ||
+        (["awaiting_buyer_offer", "awaiting_buyer_approval"].includes(session.status) &&
+          isNewShoppingRequest(buyerText) &&
+          !isDealRequest(buyerText)))
+    );
     const activeSession = startsFreshSearch ? null : session;
     const activeProducts = startsFreshSearch ? catalog : products;
     const combined = `${startsFreshSearch ? "" : intentDraft} ${buyerText}`.trim();
@@ -318,6 +334,19 @@ export default function ShopPage() {
     setIsThinking(true);
 
     if (activeSession?.status === "awaiting_buyer_offer") {
+      if (isDealRequest(buyerText) && activeSession.activeCart.length > 0) {
+        const reviewed = requestGrowthReview(activeSession, buyerText, products, loadGrowthPlaybook());
+        persist(reviewed);
+        if (reviewed.offerDecision === "blocked" && reviewed.offer?.approvalMode === "review_only") {
+          addAgentMessage("That deal is outside the auto-approved playbook, so I did not show or apply it. I logged it in the merchant dashboard with the reason and boundary. Your cart is unchanged.");
+        } else if (reviewed.status === "awaiting_buyer_offer" && reviewed.offer) {
+          addAgentMessage(`${reviewed.offer.buyerMessage} With it, your exact total is ${formatINR(reviewed.offer.finalAmount)}. Say okay to add it and pay, or say skip.`);
+        } else {
+          addAgentMessage("I could not find a merchant-approved deal boundary for this cart. Your selected item is unchanged.");
+        }
+        setIsThinking(false);
+        return;
+      }
       if (isAffirmative(buyerText)) {
         const accepted = decideBuyerOffer(activeSession, true);
         persist(accepted);
@@ -331,6 +360,25 @@ export default function ShopPage() {
         setIsThinking(false);
         return;
       }
+    }
+
+    if (
+      activeSession &&
+      activeSession.activeCart.length > 0 &&
+      activeSession.status === "awaiting_buyer_approval" &&
+      isDealRequest(buyerText)
+    ) {
+      const reviewed = requestGrowthReview(activeSession, buyerText, products, loadGrowthPlaybook());
+      persist(reviewed);
+      if (reviewed.offerDecision === "blocked" && reviewed.offer?.approvalMode === "review_only") {
+        addAgentMessage("This is outside the auto-approved playbook, so I withheld it from checkout and logged it for merchant review. Your cart has not changed.");
+      } else if (reviewed.status === "awaiting_buyer_offer" && reviewed.offer) {
+        addAgentMessage(`${reviewed.offer.buyerMessage} With it, your exact total is ${formatINR(reviewed.offer.finalAmount)}. Say okay to add it and pay, or say skip.`);
+      } else {
+        addAgentMessage("No approved growth boundary matched that deal request. Your current cart is unchanged.");
+      }
+      setIsThinking(false);
+      return;
     }
 
     if (activeSession?.status === "awaiting_buyer_approval" && isAffirmative(buyerText)) {
@@ -396,9 +444,7 @@ export default function ShopPage() {
     if (!session) return;
     const next = selectRecommendedProduct(session, productId, products, loadGrowthPlaybook());
     persist(next);
-    if (next.status === "awaiting_merchant") {
-      addAgentMessage("This item is selected. A merchant-controlled offer is waiting for review; you can wait or continue without it.");
-    } else if (next.status === "awaiting_buyer_offer" && next.offer) {
+    if (next.status === "awaiting_buyer_offer" && next.offer) {
       addAgentMessage(`${next.offer.buyerMessage} With it, your exact total is ${formatINR(next.offer.finalAmount)}. Say okay to add it and pay, or say skip.`);
     } else if (next.status === "awaiting_buyer_approval") {
       addAgentMessage(exactApprovalMessage(next));
@@ -417,13 +463,6 @@ export default function ShopPage() {
     const declined = decideBuyerOffer(session, false);
     persist(declined);
     addAgentMessage(exactApprovalMessage(declined));
-  }
-
-  function skipPendingOffer() {
-    if (!session) return;
-    const next = continueWithoutOffer(session);
-    persist(next);
-    addAgentMessage(exactApprovalMessage(next));
   }
 
   function askAboutProduct(name: string) {
@@ -505,7 +544,7 @@ export default function ShopPage() {
             </section> : null}
 
             {session?.status === "checkout_blocked" ? <div className="notice danger"><ShieldCheck size={18} /><span><strong>{session.activeCart.length ? "Checkout stopped" : "No catalog match"}</strong>{session.activeCart.length ? session.auditEvents.at(-1)?.summary : session.recommendation.explanation}<small>No new money action was taken.</small></span></div> : null}
-            {session?.status === "awaiting_merchant" ? <div className="notice neutral"><ShieldCheck size={17} /><span><strong>{selectedProduct?.name ?? "Your selected item"} is selected.</strong>A merchant-controlled offer is being reviewed. Your cart has not changed.<button className="inline-action" onClick={skipPendingOffer}>Continue without the offer</button></span></div> : null}
+            {session?.offerDecision === "blocked" && session.offer?.approvalMode === "review_only" ? <div className="notice neutral"><ShieldCheck size={17} /><span><strong>{selectedProduct?.name ?? "Your selected item"} is selected.</strong>A bigger growth idea was withheld because the playbook marks it review-only. Your cart has not changed.</span></div> : null}
 
             {session?.offerDecision === "available_to_buyer" && session.offer ? <div className="offer-card">
               <span className="offer-label">{session.offer.source === "historical_pattern" ? `Evidence-backed from ${session.offer.evidence.observationCount} seed observations` : "Cold-start hypothesis"} · {session.offer.boundaryName}</span><strong>{session.offer.buyerMessage}</strong><p>Exact total with this offer: {formatINR(session.offer.finalAmount)}. Say okay to add it and pay. Boundary: {session.offer.ruleId}. {session.offer.safetySummary}</p>
