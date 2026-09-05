@@ -1,6 +1,6 @@
 # GlowCart Agentic Commerce
 
-GlowCart is a reusable agentic-commerce engine for Razorpay merchants. A buyer-facing shopping agent grounds recommendations in the merchant catalogue, while an editable growth playbook, hybrid approvals, deterministic guardrails, Razorpay Test Mode checkout, voice interaction, and an audit trail keep commerce actions explainable and bounded.
+GlowCart is a reusable agentic-commerce engine for Razorpay merchants. A buyer-facing shopping agent grounds recommendations in the merchant catalogue, while an editable Growth Playbook decides which upsells, cross-sells, bundle switches, and deal requests are allowed. Buyer-visible offers still require exact-cart approval before Razorpay Test Mode checkout. Unsafe, off-playbook, or review-only opportunities are withheld from the buyer and recorded in the merchant audit trail.
 
 The application lives in [`agentic-commerce`](./agentic-commerce).
 
@@ -15,6 +15,17 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Useful routes:
+
+```text
+/           Retail landing page
+/login      Buyer sign-in
+/shop       Catalogue + GlowGuide buyer agent
+/cart       Optional cart inspection
+/merchant   Growth Playbook, opportunities, and audit trail
+/findit     500-scenario Find-it evaluation dashboard
+```
+
 ## Verification
 
 ```bash
@@ -23,6 +34,8 @@ npm run lint
 npm run build
 npm run test:e2e
 ```
+
+The Find-it suite currently runs 500 deterministic synthetic scenarios, including 20 critical adversarial financial tests for amount tampering, cart mutation, stale prices, zero inventory, duplicate checkout, expired buyer approval, unsafe claims, unsupported products, over-budget carts, and review-only deal requests. Every case is individually inspectable at `/findit`.
 
 ## Render Deployment
 
@@ -47,3 +60,33 @@ Never commit `.env.local` or provider secrets.
 - [`Implementation audit`](./agentic-commerce/docs/implementation-audit.md)
 - [`Build playbook`](./agentic-commerce/docs/build-playbook.md)
 - [`Product strategy`](./agentic-commerce/docs/track-01-agentic-commerce-strategy.md)
+
+## Architecture Snapshot
+
+```mermaid
+flowchart LR
+  Buyer[Buyer] --> Storefront[GlowCart Storefront]
+  Storefront --> Guide[GlowGuide Buyer Agent]
+  Guide --> Intent[Structured Intent]
+  Intent --> Catalog[Agent-Readable Catalog]
+  Catalog --> Recommendations[Grounded Recommendations]
+  Recommendations --> BuyerChoice[Buyer Chooses Product]
+  BuyerChoice --> GrowthDetector[Growth Moment Detector]
+  GrowthDetector --> Playbook[Merchant Growth Playbook]
+  Playbook --> OfferEngine[Offer Engine]
+  OfferEngine --> Guardrails[Deterministic Guardrails]
+  Guardrails -->|auto-approved boundary| BuyerOffer[Buyer-Visible Offer]
+  Guardrails -->|review-only or unsafe| ReviewLog[Merchant Review Log]
+  BuyerOffer --> ExactApproval[Exact Cart Approval]
+  BuyerChoice --> ExactApproval
+  ExactApproval --> Mandate[Mandate Lite]
+  Mandate --> CheckoutChecks[Checkout Guardrails]
+  CheckoutChecks --> Razorpay[Razorpay Test Order]
+  Guide --> Audit[Audit Trail]
+  Playbook --> Audit
+  Guardrails --> Audit
+  Razorpay --> Audit
+  Audit --> Merchant[Merchant Console]
+  CheckoutChecks --> FindIt[Find-it 500 Scenario Evaluation]
+  Guardrails --> FindIt
+```

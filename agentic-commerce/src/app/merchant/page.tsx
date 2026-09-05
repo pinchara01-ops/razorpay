@@ -27,7 +27,7 @@ import { COMMERCE_SESSION_KEY, loadCommerceSession, saveCommerceSession } from "
 import { loadGrowthPlaybook, resetGrowthPlaybook, saveGrowthPlaybook } from "@/lib/growth/playbookStore";
 import { formatINR } from "@/lib/money";
 import { growthPolicyRepository, policyRepository, productRepository } from "@/lib/repositories/commerceRepositories";
-import type { ApprovalMode, CommerceSession, GrowthRule, RiskLevel } from "@/lib/types";
+import type { ApprovalMode, AuditEvent, CommerceSession, GrowthRule, GuardrailCheck, RiskLevel } from "@/lib/types";
 import "@/components/ui.css";
 import "../page.css";
 
@@ -238,7 +238,7 @@ export default function MerchantConsolePage() {
           <section className="admin-panel">
             <div className="admin-heading"><div><span className="section-icon"><FileClock size={18} /></span><div><h2>Decision history</h2><p>Record of recommendations, approvals, blocks, and payment state</p></div></div><span className="state-pill">{audit.length} events</span></div>
             <div className="audit-table">
-              {audit.map((event) => <article key={event.id}><span className={`audit-dot audit-${event.tone ?? "info"}`} /><div><strong>{event.action.replaceAll("_", " ")}</strong><p>{event.summary}</p>{typeof event.data?.source === "string" ? <small>{event.data.source === "historical_pattern" ? "Evidence-backed" : "Cold-start hypothesis"} · Boundary: {String(event.data.boundaryId ?? "none")}</small> : null}</div><span>{event.actor}</span><time>{new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></article>)}
+              {audit.map((event) => <AuditRow event={event} key={event.id} />)}
             </div>
           </section>
         ) : null}
@@ -271,5 +271,76 @@ function Opportunity({ session, voiceStatus, onVoice }: { session: CommerceSessi
         <span className="decision-state"><ShieldCheck size={17} /> {reviewOnly ? "withheld for review" : session.offerDecision.replaceAll("_", " ")}</span>
       </div>
     </div>
+  );
+}
+
+function isGuardrailChecks(value: unknown): value is GuardrailCheck[] {
+  return Array.isArray(value) && value.every((item) =>
+    typeof item === "object" &&
+    item !== null &&
+    "name" in item &&
+    "passed" in item &&
+    "reason" in item
+  );
+}
+
+function auditMetadata(event: AuditEvent) {
+  const data = event.data ?? {};
+  const metadata: string[] = [`event ${event.id}`];
+  if (typeof data.source === "string") metadata.push(data.source === "historical_pattern" ? "evidence-backed" : "cold-start hypothesis");
+  if (typeof data.boundaryId === "string") metadata.push(`boundary ${data.boundaryId}`);
+  if (typeof data.mandateId === "string") metadata.push(`mandate ${data.mandateId}`);
+  if (typeof data.provider === "string") metadata.push(data.provider.replaceAll("_", " "));
+  if (typeof data.amount === "number") metadata.push(formatINR(data.amount));
+  return metadata;
+}
+
+function auditDataEntries(event: AuditEvent) {
+  return Object.entries(event.data ?? {}).filter(([key]) => key !== "checks");
+}
+
+function formatAuditValue(value: unknown): string {
+  if (value === null || value === undefined) return "none";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
+function AuditRow({ event }: { event: AuditEvent }) {
+  const checks = isGuardrailChecks(event.data?.checks) ? event.data.checks : [];
+  const dataEntries = auditDataEntries(event);
+  return (
+    <article className="audit-row">
+      <span className={`audit-dot audit-${event.tone ?? "info"}`} />
+      <div>
+        <div className="audit-title-line">
+          <strong>{event.action.replaceAll("_", " ")}</strong>
+          <span>{event.actor}</span>
+        </div>
+        <p>{event.summary}</p>
+        <div className="audit-meta">
+          {auditMetadata(event).map((item) => <small key={item}>{item}</small>)}
+        </div>
+        {checks.length ? (
+          <div className="audit-checks">
+            {checks.map((check) => <span className={check.passed ? "passed" : "failed"} key={check.name}>{check.name}: {check.passed ? "pass" : "fail"}<small>{check.reason}</small></span>)}
+          </div>
+        ) : null}
+        {dataEntries.length ? (
+          <details className="audit-detail">
+            <summary>Inspect event data</summary>
+            <dl>
+              {dataEntries.map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key.replaceAll("_", " ")}</dt>
+                  <dd>{formatAuditValue(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        ) : null}
+      </div>
+      <time>{new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
+    </article>
   );
 }

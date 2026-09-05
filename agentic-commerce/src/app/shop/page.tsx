@@ -76,6 +76,13 @@ function isNewShoppingRequest(text: string) {
   return /\b(i want|i need|build me|find me|show me|looking for|buy|gift for|routine|phone|cleanser|moisturizer|sunscreen)\b/i.test(text);
 }
 
+function isUnsupportedStoreRequest(text: string) {
+  const normalized = text.toLowerCase();
+  const outsideCatalog = /\b(phone|camera|laptop|headphones|shoes|protein|watch|wallet)\b/.test(normalized);
+  const inCatalog = /\b(skin|skincare|cleanser|moisturizer|sunscreen|routine|serum|oily|gift note)\b/.test(normalized);
+  return outsideCatalog && !inCatalog;
+}
+
 export default function ShopPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<BuyerProfile | null>(null);
@@ -332,6 +339,15 @@ export default function ShopPage() {
     setMessages((current) => startsFreshSearch ? [buyerMessage] : [...current, buyerMessage]);
     setInput("");
     setIsThinking(true);
+
+    if (isUnsupportedStoreRequest(combined)) {
+      const next = startCommerceSession(combined, activeProducts);
+      persist(next);
+      setIntentDraft("");
+      addAgentMessage(next.recommendation.explanation);
+      setIsThinking(false);
+      return;
+    }
 
     if (activeSession?.status === "awaiting_buyer_offer") {
       if (isDealRequest(buyerText) && activeSession.activeCart.length > 0) {

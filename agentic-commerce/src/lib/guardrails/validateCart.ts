@@ -74,6 +74,17 @@ export function validateMandateForCheckout(mandate: Mandate | null, currentItems
     reason: currentHash === mandate.cartHash ? "Current cart matches the approved cart." : "Cart or amount changed after approval."
   });
 
+  for (const item of currentItems) {
+    const product = products.find((candidate) => candidate.id === item.productId);
+    checks.push({
+      name: `Checkout amount: ${item.productId}`,
+      passed: Boolean(product && item.unitAmount === product.price),
+      reason: product && item.unitAmount === product.price
+        ? "Submitted checkout line amount matches the current catalog price."
+        : "Submitted checkout line amount differs from the current catalog price."
+    });
+  }
+
   checks.push({
     name: "Duplicate checkout",
     passed: !mandate.usedAt,

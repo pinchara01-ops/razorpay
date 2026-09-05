@@ -11,7 +11,8 @@ const categoryLabels: Record<FindItScenarioCategory, string> = {
   playbook_block: "Playbook block",
   review_only: "Review-only deals",
   cart_integrity: "Cart integrity",
-  stock_recheck: "Stock recheck"
+  stock_recheck: "Stock recheck",
+  financial_adversarial: "Financial adversarial"
 };
 
 function percent(value: number) {
@@ -20,8 +21,11 @@ function percent(value: number) {
 
 export default function FindItPage() {
   const report = runFindItEvaluation();
-  const samples = report.results.filter((_, index) => index % 23 === 0).slice(0, 18);
-  const displayRows = report.failures.length > 0 ? report.failures : samples;
+  const adversarial = report.categories.find((category) => category.category === "financial_adversarial");
+  const orderedRows = [
+    ...report.failures,
+    ...report.results.filter((result) => result.passed)
+  ];
 
   return (
     <main className="findit-page">
@@ -56,6 +60,7 @@ export default function FindItPage() {
         <article><Check size={20} /><span>Passed</span><strong>{report.passed}</strong></article>
         <article><X size={20} /><span>Failed</span><strong>{report.failed}</strong></article>
         <article><ShieldCheck size={20} /><span>Blocked money actions</span><strong>{report.moneyActionsBlocked}</strong></article>
+        <article><FileWarning size={20} /><span>Financial attacks</span><strong>{adversarial?.total ?? 0}</strong><small>{adversarial?.passed ?? 0} blocked safely</small></article>
       </section>
 
       <section className="findit-grid">
@@ -88,6 +93,7 @@ export default function FindItPage() {
             <li>Auto-approved offers still need buyer approval before Razorpay.</li>
             <li>Review-only deals are withheld from the buyer and logged.</li>
             <li>Price or stock changes block checkout before money movement.</li>
+            <li>Adversarial amount, cart, mandate, inventory, and deal attacks are blocked.</li>
           </ul>
           <p className="findit-note">These are synthetic cases, not real customer analytics. The goal is regression confidence for the agentic commerce control logic.</p>
         </article>
@@ -95,25 +101,47 @@ export default function FindItPage() {
 
       <section className="findit-panel">
         <div className="findit-heading">
-          <div><Activity size={19} /><h2>{report.failures.length ? "Failures to inspect" : "Representative scenarios"}</h2></div>
-          <span>{displayRows.length} shown</span>
+          <div><Activity size={19} /><h2>Inspectable case traces</h2></div>
+          <span>{orderedRows.length} cases shown</span>
         </div>
-        <div className="scenario-table">
-          <div className="scenario-row scenario-head">
-            <span>Case</span>
-            <span>Category</span>
-            <span>Buyer prompt</span>
-            <span>Result</span>
-            <span>Amount</span>
-          </div>
-          {displayRows.map((result) => (
-            <div className="scenario-row" key={result.id}>
-              <span><strong>{result.id}</strong><small>{result.passed ? "passed" : "failed"}</small></span>
-              <span>{categoryLabels[result.category]}</span>
-              <span>{result.buyerPrompt}</span>
-              <span><strong>{result.actual}</strong><small>{result.evidence.join(" · ")}</small></span>
-              <span>{result.finalAmount ? formatINR(result.finalAmount) : "None"}</span>
-            </div>
+        <div className="scenario-list">
+          {orderedRows.map((result, index) => (
+            <details className={result.passed ? "scenario-case" : "scenario-case scenario-failed"} key={`${result.id}-${index}`} id={result.id}>
+              <summary>
+                <span><strong>{result.id}</strong><small>{result.passed ? "passed" : "failed"}</small></span>
+                <span>{categoryLabels[result.category]}</span>
+                <span>{result.buyerPrompt}</span>
+                <span>{result.finalAmount ? formatINR(result.finalAmount) : "No money action"}</span>
+                <span className={`risk-pill risk-${result.risk}`}>{result.risk}</span>
+              </summary>
+              <div className="scenario-detail-grid">
+                <section>
+                  <h3>Expected</h3>
+                  <p>{result.expected}</p>
+                </section>
+                <section>
+                  <h3>Actual</h3>
+                  <p>{result.actual}</p>
+                  {result.attackType ? <span className="attack-pill">{result.attackType.replaceAll("_", " ")}</span> : null}
+                </section>
+                <section>
+                  <h3>Engine Evidence</h3>
+                  <ul>{result.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+                </section>
+                <section>
+                  <h3>Guardrail Checks</h3>
+                  <ul>{result.guardrailChecks.length ? result.guardrailChecks.map((item) => <li key={item}>{item}</li>) : <li>No checkout guardrail needed for this case.</li>}</ul>
+                </section>
+                <section>
+                  <h3>Audit Actions</h3>
+                  <ul>{result.auditActions.map((item) => <li key={item}>{item.replaceAll("_", " ")}</li>)}</ul>
+                </section>
+                <section>
+                  <h3>Money Action</h3>
+                  <p>{result.moneyActionBlocked ? "Blocked, withheld, or requires buyer authorization before Razorpay." : "No blocked money action; buyer-visible offer still needs exact-cart approval."}</p>
+                </section>
+              </div>
+            </details>
           ))}
         </div>
       </section>

@@ -65,6 +65,13 @@ flowchart TD
     Audit[Audit Trail] --> Dashboard[Operations Dashboard]
   end
 
+  subgraph Evaluation[Find-it Scenario Evaluation]
+    ScenarioGen[500 Synthetic Scenarios] --> EvalRunner[Deterministic Engine Runner]
+    EvalRunner --> CaseTrace[Inspectable Case Traces]
+    EvalRunner --> Metrics[Category Accuracy Metrics]
+    Adv[20 Adversarial Financial Tests] --> EvalRunner
+  end
+
   ExactApproval -. Optional inspection .-> CartPage[Cart Details Page]
   ExactApproval -- No --> Stop[Stop or edit cart]
   ExactApproval -- Yes --> Mandate[Mandate Lite]
@@ -85,6 +92,8 @@ flowchart TD
   BlockOffer --> Audit
   BlockCheckout --> Audit
   PaymentState --> Audit
+  CommerceEngine --> EvalRunner
+  Audit --> CaseTrace
 ```
 
 ## Agent Roles
@@ -199,7 +208,7 @@ This is our hackathon-sized version of agent-payment authorization.
 | Buyer approval | Confirm final cart and exact amount inside GlowGuide; keep `/cart` optional | Context-bound text/voice approval or explicit button + Mandate Lite |
 | Payment action | Create test-mode payment order | Razorpay Orders API |
 | Proof | Show all decisions/actions | Audit trail + merchant dashboard |
-| Scenario evaluation | Test whether the engine follows core commerce safety rules | Find-it dashboard with 500 synthetic scenarios |
+| Scenario evaluation | Test whether the engine follows core commerce safety rules | Find-it dashboard with 500 inspectable synthetic scenarios and adversarial financial tests |
 
 ## API Keys Needed
 
@@ -293,5 +302,19 @@ Growth opportunity withheld. This shopper asked for a bigger deal. The proposed 
 | Buyer and merchant voice | OpenAI microphone transcription and ElevenLabs English voice connected; browser speech fallback for output |
 | Audit trail and handled price-change failure | Implemented |
 | LLM structured-output adapter | Implemented and verified |
-| Find-it 500-scenario synthetic evaluation | Implemented at `/findit`; covers catalog grounding, claim safety, auto-growth, playbook blocks, review-only deals, cart integrity, and stock recheck |
+| Find-it 500-scenario synthetic evaluation | Implemented at `/findit`; covers catalog grounding, claim safety, auto-growth, playbook blocks, review-only deals, cart integrity, stock recheck, and 20 adversarial financial cases |
+| Individual Find-it case inspection | Implemented with expandable traces showing expected result, actual result, engine evidence, guardrail checks, audit actions, risk, and attack type |
 | Durable database and authenticated merchant access | Required before production use |
+
+## Find-it Scenario Coverage
+
+The evaluation set is intentionally mixed between normal growth behavior and hostile commerce behavior:
+
+- Catalog grounding: unsupported product asks must not become fake inventory.
+- Claim safety: unverified safety or medical claims stop before recommendation.
+- Auto growth: low-risk playbook boundaries can produce buyer-visible offers, but the cart is not changed until the buyer accepts.
+- Playbook blocks: disabled merchant boundaries prevent the offer.
+- Review-only deals: large or risky deal requests are withheld from the buyer and logged for merchant review.
+- Cart integrity: price or cart changes after approval block checkout before a Razorpay order.
+- Stock recheck: inventory changes after approval block checkout before a Razorpay order.
+- Financial adversarial: amount tampering, cart mutation, duplicate checkout, expired approval, stale price, zero inventory, over-budget cart, unsafe claim, unsupported product, and review-only deal attacks.
